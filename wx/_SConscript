@@ -1,0 +1,31 @@
+Import("env")
+import os
+
+plugin_name = "nvgt_wx"
+plugin_env = env.Clone()
+wx_lib_path = os.path.join("lib")
+wx_include = os.path.join("include")
+wx_setup_h = os.path.join(wx_lib_path, "mswu")
+
+if plugin_env["PLATFORM"] == "win32":
+    plugin_env.Append(CPPPATH=[wx_include, wx_setup_h])
+    plugin_env.Append(LIBPATH=[wx_lib_path])
+    
+    plugin_env.Append(LIBS=[
+        "wxmsw33u_core", 
+        "wxbase33u", 
+        "comctl32", "rpcrt4", "shlwapi", "version", "ws2_32", "windowscodecs", "uxtheme"
+    ])
+    
+    plugin_env.Append(CPPDEFINES=[
+        "UNICODE", "_UNICODE", 
+        "WXUSINGDLL", 
+        "__WXMSW__"
+    ])
+
+shared_lib = plugin_env.SharedLibrary(
+    target="#release/lib/" + plugin_name,
+    source=["wx.cpp"]
+)
+
+Return("shared_lib")
