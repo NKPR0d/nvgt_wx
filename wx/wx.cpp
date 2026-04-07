@@ -49,12 +49,8 @@ void Release(void* ptr) {
     }
 }
 
-template<typename T>
-wxWindow* to_window(T* obj) {
-    if (!obj) return nullptr;
-    AddRef(obj);
-    return static_cast<wxWindow*>(obj);
-}
+template<typename T> wxWindow* to_window(T* obj) { if (obj) AddRef(obj); return static_cast<wxWindow*>(obj); }
+template<typename T> wxControl* to_control(T* obj) { if (obj) AddRef(obj); return static_cast<wxControl*>(obj); }
 
 static const int c_wxVERTICAL = wxVERTICAL;
 static const int c_wxHORIZONTAL = wxHORIZONTAL;
@@ -86,17 +82,20 @@ void OnWxEvent(wxCommandEvent& event) {
 void wx_window_show(wxWindow* self, bool s) {
     if (self) self->Show(s);
 }
-
 void wx_window_hide(wxWindow* self) { 
     if (self) self->Hide(); 
 }
-
+void wx_window_set_focus(wxWindow* self) { if (self) self->SetFocus(); }
 void wx_window_bind(wxWindow* self, int event_type, asIScriptFunction* callback) {
     if (!self || !callback) return;
     int id = self->GetId();
     g_event_handlers[id] = { callback, callback->GetEngine() };
     self->Bind(wxEVT_BUTTON, &OnWxEvent, id);
 }
+
+void wx_control_set_label(wxControl* self, const std::string& label) { if (self) self->SetLabel(wxString::FromUTF8(label.c_str())); }
+std::string wx_control_get_label(wxControl* self) { return self ? std::string(self->GetLabel().utf8_str()) : ""; }
+void wx_control_enable(wxControl* self, bool e) { if (self) self->Enable(e); }
 
 void wx_frame_set_title(wxFrame* self, const std::string& title) {
     if (self) self->SetTitle(wxString::FromUTF8(title.c_str()));
@@ -152,22 +151,42 @@ public:
 void WxConstructor(WxManager* self) { new(self) WxManager(); }
 void WxDestructor(WxManager* self) { self->~WxManager(); }
 
-#define REGISTER_WX_TYPE(as_name, wx_type) \
-    engine->RegisterObjectType(as_name, 0, asOBJ_REF); \
-    engine->RegisterObjectBehaviour(as_name, asBEHAVE_ADDREF, "void f()", asFUNCTION(AddRef), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectBehaviour(as_name, asBEHAVE_RELEASE, "void f()", asFUNCTION(Release), asCALL_CDECL_OBJFIRST); \
-    if (std::string(as_name) != "wx_window") { \
-        engine->RegisterObjectMethod(as_name, "wx_window@ opImplCast()", asFUNCTION(to_window<wx_type>), asCALL_CDECL_OBJFIRST); \
-    } \
-    engine->RegisterObjectMethod(as_name, "void show(bool visible = true)", asFUNCTION(wx_window_show), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(as_name, "void hide()", asFUNCTION(wx_window_hide), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(as_name, "void bind(int, wx_callback@)", asFUNCTION(wx_window_bind), asCALL_CDECL_OBJFIRST);
+#define REG_BASE_REF(name) \
+    engine->RegisterObjectBehaviour(name, asBEHAVE_ADDREF, "void f()", asFUNCTION(AddRef), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectBehaviour(name, asBEHAVE_RELEASE, "void f()", asFUNCTION(Release), asCALL_CDECL_OBJFIRST);
 
-#define REGISTER_SIZER_TYPE(as_name, wx_type) \
+#define REG_WINDOW_METHODS(name) \
+    engine->RegisterObjectMethod(name, "void show(bool visible = true)", asFUNCTION(wx_window_show), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void hide()", asFUNCTION(wx_window_hide), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void bind(int, wx_callback@)", asFUNCTION(wx_window_bind), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_focus()", asFUNCTION(wx_window_set_focus), asCALL_CDECL_OBJFIRST);
+
+#define REG_CONTROL_METHODS(name) \
+    engine->RegisterObjectMethod(name, "void set_label(const string &in)", asFUNCTION(wx_control_set_label), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "string get_label()", asFUNCTION(wx_control_get_label), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void enable(bool)", asFUNCTION(wx_control_enable), asCALL_CDECL_OBJFIRST);
+
+#define REG_SIZER_METHODS(name) \
+    engine->RegisterObjectMethod(name, "void add(wx_window@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_add), asCALL_CDECL_OBJFIRST);
+
+#define REGISTER_WX_WINDOW(as_name, wx_type) \
     engine->RegisterObjectType(as_name, 0, asOBJ_REF); \
-    engine->RegisterObjectBehaviour(as_name, asBEHAVE_ADDREF, "void f()", asFUNCTION(AddRef), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectBehaviour(as_name, asBEHAVE_RELEASE, "void f()", asFUNCTION(Release), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(as_name, "void add(wx_window@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_add), asCALL_CDECL_OBJFIRST);
+    REG_BASE_REF(as_name); \
+    engine->RegisterObjectMethod(as_name, "wx_window@ opImplCast()", asFUNCTION(to_window<wx_type>), asCALL_CDECL_OBJFIRST); \
+    REG_WINDOW_METHODS(as_name);
+
+#define REGISTER_WX_CONTROL(as_name, wx_type) \
+    engine->RegisterObjectType(as_name, 0, asOBJ_REF); \
+    REG_BASE_REF(as_name); \
+    engine->RegisterObjectMethod(as_name, "wx_control@ opImplCast()", asFUNCTION(to_control<wx_type>), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(as_name, "wx_window@ opImplCast()", asFUNCTION(to_window<wx_type>), asCALL_CDECL_OBJFIRST); \
+    REG_WINDOW_METHODS(as_name); \
+    REG_CONTROL_METHODS(as_name);
+
+#define REGISTER_WX_SIZER(as_name, wx_type) \
+    engine->RegisterObjectType(as_name, 0, asOBJ_REF); \
+    REG_BASE_REF(as_name); \
+    REG_SIZER_METHODS(as_name);
 
 plugin_main(nvgt_plugin_shared* shared) {
     if (!prepare_plugin(shared)) return false;
@@ -181,14 +200,24 @@ plugin_main(nvgt_plugin_shared* shared) {
 
     engine->RegisterFuncdef("void wx_callback()");
 
-    REGISTER_WX_TYPE("wx_window", wxWindow);
-    REGISTER_WX_TYPE("wx_frame", wxFrame);
-    REGISTER_WX_TYPE("wx_button", wxButton);
+    engine->RegisterObjectType("wx_window", 0, asOBJ_REF);
+    engine->RegisterObjectType("wx_control", 0, asOBJ_REF);
 
-    REGISTER_SIZER_TYPE("wx_box_sizer", wxBoxSizer);
+    REG_BASE_REF("wx_window");
+    REG_WINDOW_METHODS("wx_window");
 
+    REG_BASE_REF("wx_control");
+    engine->RegisterObjectMethod("wx_control", "wx_window@ opImplCast()", asFUNCTION(to_window<wxControl>), asCALL_CDECL_OBJFIRST);
+    REG_WINDOW_METHODS("wx_control");
+    REG_CONTROL_METHODS("wx_control");
+
+    REGISTER_WX_SIZER("wx_box_sizer", wxBoxSizer);
+
+    REGISTER_WX_WINDOW("wx_frame", wxFrame);
     engine->RegisterObjectMethod("wx_frame", "void set_title(const string &in)", asFUNCTION(wx_frame_set_title), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_frame", "void set_sizer(wx_box_sizer@)", asMETHOD(wxFrame, SetSizer), asCALL_THISCALL);
+
+    REGISTER_WX_CONTROL("wx_button", wxButton);
 
     engine->RegisterObjectType("wx", sizeof(WxManager), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_C);
     engine->RegisterObjectBehaviour("wx", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(WxConstructor), asCALL_CDECL_OBJLAST);
