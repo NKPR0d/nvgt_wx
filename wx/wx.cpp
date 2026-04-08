@@ -21,7 +21,13 @@ void ReturnContextToPool(asIScriptContext* ctx) {
     }
 }
 
+struct ScriptEventData {
+    asIScriptFunction* callback;
+    asIScriptEngine* engine;
+};
+
 std::map<void*, int> g_ref_counts;
+std::map<int, ScriptEventData> g_event_handlers;
 
 void AddRef(void* ptr) {
     if (!ptr) return;
@@ -39,6 +45,11 @@ void Release(void* ptr) {
         wxObject* wx_obj = static_cast<wxObject*>(ptr);
         wxWindow* win = dynamic_cast<wxWindow*>(wx_obj);
         if (win) {
+            int id = win->GetId();
+            if (g_event_handlers.count(id)) {
+                g_event_handlers[id].callback->Release();
+                g_event_handlers.erase(id);
+            }
             if (!win->GetParent()) win->Destroy();
             return;
         }
@@ -53,28 +64,16 @@ template<typename T> wxWindow* to_window(T* obj) { if (obj) AddRef(obj); return 
 template<typename T> wxControl* to_control(T* obj) { if (obj) AddRef(obj); return static_cast<wxControl*>(obj); }
 template<typename T> wxSizer* to_sizer(T* obj) { if (obj) AddRef(obj); return static_cast<wxSizer*>(obj); }
 
-static const int c_wxVERTICAL = wxVERTICAL;
-static const int c_wxHORIZONTAL = wxHORIZONTAL;
-static const int c_wxEXPAND = wxEXPAND;
-static const int c_wxALL = wxALL;
-static const int c_wxEVT_BUTTON = wxEVT_BUTTON;
-static const int c_wxBOTH = wxBOTH;
-
-struct ScriptEventData {
-    asIScriptFunction* callback;
-    asIScriptEngine* engine;
-};
-
-std::map<int, ScriptEventData> g_event_handlers;
-
-void OnWxEvent(wxCommandEvent& event) {
-    int id = event.GetId();
-    if (g_event_handlers.count(id)) {
-        ScriptEventData& data = g_event_handlers[id];
+void OnWxEvent(wxEvent& event) {
+    int id = event.GetId();    
+    auto it = g_event_handlers.find(id);
+    if (it != g_event_handlers.end()) {
+        ScriptEventData& data = it->second;        
         asIScriptContext* ctx = GetContextFromPool(data.engine);
         if (ctx) {
             ctx->Prepare(data.callback);
-            ctx->Execute();
+            int r = ctx->Execute();            
+            if (r == asEXECUTION_EXCEPTION) {}            
             ReturnContextToPool(ctx);
         }
     }
@@ -84,8 +83,12 @@ void OnWxEvent(wxCommandEvent& event) {
 void wx_window_bind(wxWindow* self, int event_type, asIScriptFunction* callback) {
     if (!self || !callback) return;
     int id = self->GetId();
+    if (g_event_handlers.count(id)) {
+        g_event_handlers[id].callback->Release();
+    }
+    callback->AddRef();
     g_event_handlers[id] = { callback, callback->GetEngine() };
-    self->Bind(wxEVT_BUTTON, &OnWxEvent, id);
+    self->Bind(static_cast<wxEventType>(event_type), &OnWxEvent, id);
 }
 
 std::string wx_window_get_tool_tip(wxWindow* self) {
@@ -236,7 +239,7 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
     engine->RegisterObjectMethod(name, "void refresh()", asMETHOD(wxWindow, Refresh), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void update()", asMETHOD(wxWindow, Update), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "bool destroy()", asMETHOD(wxWindow, Destroy), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "void bind(int, wx_callback@)", asFUNCTION(wx_window_bind), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void bind(wx_event_type, wx_callback@)", asFUNCTION(wx_window_bind), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "string get_tool_tip()", asFUNCTION(wx_window_get_tool_tip), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_tool_tip(const string &in)", asFUNCTION(wx_window_set_tool_tip), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void get_background_colour(int &out, int &out, int &out)", asFUNCTION(wx_window_get_background_colour), asCALL_CDECL_OBJFIRST); \
@@ -255,8 +258,8 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
     engine->RegisterObjectMethod(name, "void set_label(const string &in)", asFUNCTION(wx_control_set_label), asCALL_CDECL_OBJFIRST); \
 
 #define REG_SIZER_METHODS(name) \
-    engine->RegisterObjectMethod(name, "void add(wx_window@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_add_window), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void add(wx_sizer@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_add_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void add(wx_window@, int proportion = 0, wx_sizer_flag flag = 0, int border = 0)", asFUNCTION(wx_sizer_add_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void add(wx_sizer@, int proportion = 0, wx_sizer_flag flag = 0, int border = 0)", asFUNCTION(wx_sizer_add_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void layout()", asMETHOD(wxSizer, Layout), asCALL_THISCALL);
 
 #define REGISTER_WX_WINDOW(as_name, wx_type) \
@@ -284,13 +287,25 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
 plugin_main(nvgt_plugin_shared* shared) {
     if (!prepare_plugin(shared)) return false;
     asIScriptEngine* engine = shared->script_engine;
+    engine->RegisterEnum("wx_orientation");
+    engine->RegisterEnumValue("wx_orientation", "WX_VERTICAL", wxVERTICAL);
+    engine->RegisterEnumValue("wx_orientation", "WX_HORIZONTAL", wxHORIZONTAL);
 
-    engine->RegisterGlobalProperty("const int wx_VERTICAL", (void*)&c_wxVERTICAL);
-    engine->RegisterGlobalProperty("const int wx_HORIZONTAL", (void*)&c_wxHORIZONTAL);
-    engine->RegisterGlobalProperty("const int wx_BOTH", (void*)&c_wxBOTH);
-    engine->RegisterGlobalProperty("const int wx_EXPAND", (void*)&c_wxEXPAND);
-    engine->RegisterGlobalProperty("const int wx_ALL", (void*)&c_wxALL);
-    engine->RegisterGlobalProperty("const int wx_EVT_BUTTON", (void*)&c_wxEVT_BUTTON);
+    engine->RegisterEnum("wx_sizer_flag");
+    engine->RegisterEnumValue("wx_sizer_flag", "WX_EXPAND", wxEXPAND);
+    engine->RegisterEnumValue("wx_sizer_flag", "WX_ALL", wxALL);
+    engine->RegisterEnumValue("wx_sizer_flag", "WX_LEFT", wxLEFT);
+    engine->RegisterEnumValue("wx_sizer_flag", "WX_RIGHT", wxRIGHT);
+    engine->RegisterEnumValue("wx_sizer_flag", "WX_TOP", wxTOP);
+    engine->RegisterEnumValue("wx_sizer_flag", "WX_BOTTOM", wxBOTTOM);
+    engine->RegisterEnumValue("wx_sizer_flag", "WX_ALIGN_CENTER", wxALIGN_CENTER);
+
+    engine->RegisterEnum("wx_event_type");
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_BUTTON", wxEVT_BUTTON);
+
+    engine->RegisterEnum("wx_style");
+    engine->RegisterEnumValue("wx_style", "WX_TE_MULTILINE", wxTE_MULTILINE);
+    engine->RegisterEnumValue("wx_style", "WX_TE_READONLY", wxTE_READONLY);
 
     engine->RegisterFuncdef("void wx_callback()");
 
