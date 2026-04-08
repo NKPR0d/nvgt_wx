@@ -57,6 +57,7 @@ static const int c_wxHORIZONTAL = wxHORIZONTAL;
 static const int c_wxEXPAND = wxEXPAND;
 static const int c_wxALL = wxALL;
 static const int c_wxEVT_BUTTON = wxEVT_BUTTON;
+static const int c_wxBOTH = wxBOTH;
 
 struct ScriptEventData {
     asIScriptFunction* callback;
@@ -84,6 +85,32 @@ void wx_window_bind(wxWindow* self, int event_type, asIScriptFunction* callback)
     int id = self->GetId();
     g_event_handlers[id] = { callback, callback->GetEngine() };
     self->Bind(wxEVT_BUTTON, &OnWxEvent, id);
+}
+
+void wx_window_set_tool_tip(wxWindow* self, const std::string& text) {
+    if (self) self->SetToolTip(wxString::FromUTF8(text.c_str()));
+}
+
+void wx_window_set_background_colour(wxWindow* self, int r, int g, int b) {
+    if (self) {
+        self->SetBackgroundColour(wxColour(r, g, b));
+        self->Refresh();
+    }
+}
+
+void wx_window_set_foreground_colour(wxWindow* self, int r, int g, int b) {
+    if (self) {
+        self->SetForegroundColour(wxColour(r, g, b));
+        self->Refresh();
+    }
+}
+
+void wx_window_get_size(wxWindow* self, int &out_w, int &out_h) {
+    if (self) self->GetSize(&out_w, &out_h);
+}
+
+void wx_window_set_size(wxWindow* self, int w, int h) {
+    if (self) self->SetSize(w, h);
 }
 
 void wx_control_set_label(wxControl* self, const std::string& label) { if (self) self->SetLabel(wxString::FromUTF8(label.c_str())); }
@@ -149,12 +176,25 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
     engine->RegisterObjectBehaviour(name, asBEHAVE_RELEASE, "void f()", asFUNCTION(Release), asCALL_CDECL_OBJFIRST);
 
 #define REG_WINDOW_METHODS(name) \
-    engine->RegisterObjectMethod(name, "void show(bool visible = true)", asMETHOD(wxWindow, Show), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "void hide()", asMETHOD(wxWindow, Hide), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "void enable(bool e = true)", asMETHOD(wxWindow, Enable), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "void disable()", asMETHOD(wxWindow, Disable), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool show(bool visible = true)", asMETHOD(wxWindow, Show), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool hide()", asMETHOD(wxWindow, Hide), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool enable(bool e = true)", asMETHOD(wxWindow, Enable), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool disable()", asMETHOD(wxWindow, Disable), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool has_focus()", asMETHOD(wxWindow, HasFocus), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void set_focus()", asMETHOD(wxWindow, SetFocus), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void layout()", asMETHOD(wxWindow, Layout), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void center(int direction = 3)", asMETHOD(wxWindow, Center), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "int get_id()", asMETHOD(wxWindow, GetId), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void refresh()", asMETHOD(wxWindow, Refresh), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void update()", asMETHOD(wxWindow, Update), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void bind(int, wx_callback@)", asFUNCTION(wx_window_bind), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_tool_tip(const string &in)", asFUNCTION(wx_window_set_tool_tip), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_background_colour(int, int, int)", asFUNCTION(wx_window_set_background_colour), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_foreground_colour(int, int, int)", asFUNCTION(wx_window_set_foreground_colour), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void get_size(int &out, int &out)", asFUNCTION(wx_window_get_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_size(int, int)", asFUNCTION(wx_window_set_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool is_shown()", asMETHOD(wxWindow, IsShown), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool is_enabled()", asMETHOD(wxWindow, IsEnabled), asCALL_THISCALL);
 
 #define REG_CONTROL_METHODS(name) \
     engine->RegisterObjectMethod(name, "string get_label()", asFUNCTION(wx_control_get_label), asCALL_CDECL_OBJFIRST); \
@@ -187,6 +227,7 @@ plugin_main(nvgt_plugin_shared* shared) {
 
     engine->RegisterGlobalProperty("const int wx_VERTICAL", (void*)&c_wxVERTICAL);
     engine->RegisterGlobalProperty("const int wx_HORIZONTAL", (void*)&c_wxHORIZONTAL);
+    engine->RegisterGlobalProperty("const int wx_BOTH", (void*)&c_wxBOTH);
     engine->RegisterGlobalProperty("const int wx_EXPAND", (void*)&c_wxEXPAND);
     engine->RegisterGlobalProperty("const int wx_ALL", (void*)&c_wxALL);
     engine->RegisterGlobalProperty("const int wx_EVT_BUTTON", (void*)&c_wxEVT_BUTTON);
