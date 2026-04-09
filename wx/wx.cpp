@@ -27,7 +27,8 @@ struct ScriptEventData {
 };
 
 std::map<void*, int> g_ref_counts;
-std::map<int, ScriptEventData> g_event_handlers;
+typedef std::pair<void*, int> EventKey;
+std::map<EventKey, ScriptEventData> g_event_handlers;
 
 void AddRef(void* ptr) {
     if (!ptr) return;
@@ -42,14 +43,17 @@ void Release(void* ptr) {
     if (!ptr) return;
     if (asAtomicDec(g_ref_counts[ptr]) <= 0) {
         g_ref_counts.erase(ptr);
+        for (auto it = g_event_handlers.begin(); it != g_event_handlers.end(); ) {
+            if (it->first.first == ptr) {
+                it->second.callback->Release();
+                it = g_event_handlers.erase(it);
+            } else {
+                ++it;
+            }
+        }
         wxObject* wx_obj = static_cast<wxObject*>(ptr);
         wxWindow* win = dynamic_cast<wxWindow*>(wx_obj);
         if (win) {
-            int id = win->GetId();
-            if (g_event_handlers.count(id)) {
-                g_event_handlers[id].callback->Release();
-                g_event_handlers.erase(id);
-            }
             if (!win->GetParent()) win->Destroy();
             return;
         }
@@ -66,15 +70,16 @@ template<typename T> wxSizer* to_sizer(T* obj) { if (obj) AddRef(obj); return st
 template<typename T> wxTopLevelWindow* to_tlw(T* obj) { if (obj) AddRef(obj); return static_cast<wxTopLevelWindow*>(obj); }
 
 void OnWxEvent(wxEvent& event) {
-    int id = event.GetId();    
-    auto it = g_event_handlers.find(id);
+    void* self = event.GetEventObject();
+    int type = event.GetEventType();    
+    EventKey key = { self, type };
+    auto it = g_event_handlers.find(key);
     if (it != g_event_handlers.end()) {
-        ScriptEventData& data = it->second;        
+        ScriptEventData& data = it->second;
         asIScriptContext* ctx = GetContextFromPool(data.engine);
         if (ctx) {
             ctx->Prepare(data.callback);
-            int r = ctx->Execute();            
-            if (r == asEXECUTION_EXCEPTION) {}            
+            ctx->Execute();
             ReturnContextToPool(ctx);
         }
     }
@@ -83,13 +88,13 @@ void OnWxEvent(wxEvent& event) {
 
 void wx_window_bind(wxWindow* self, int event_type, asIScriptFunction* callback) {
     if (!self || !callback) return;
-    int id = self->GetId();
-    if (g_event_handlers.count(id)) {
-        g_event_handlers[id].callback->Release();
+    EventKey key = { (void*)self, event_type };
+    if (g_event_handlers.count(key)) {
+        g_event_handlers[key].callback->Release();
     }
     callback->AddRef();
-    g_event_handlers[id] = { callback, callback->GetEngine() };
-    self->Bind(static_cast<wxEventType>(event_type), &OnWxEvent, id);
+    g_event_handlers[key] = { callback, callback->GetEngine() };
+    self->Bind(static_cast<wxEventType>(event_type), &OnWxEvent, wxID_ANY);
 }
 
 std::string wx_window_get_tool_tip(wxWindow* self) {
