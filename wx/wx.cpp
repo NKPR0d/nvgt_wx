@@ -260,9 +260,13 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
     engine->RegisterObjectMethod(name, "bool full_screen(bool show)", asMETHOD(wxTopLevelWindow, ShowFullScreen), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void maximize(bool maximize = true)", asMETHOD(wxTopLevelWindow, Maximize), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void iconize(bool iconize = true)", asMETHOD(wxTopLevelWindow, Iconize), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool is_full_screen()", asMETHOD(wxTopLevelWindow, IsFullScreen), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "bool is_maximized()", asMETHOD(wxTopLevelWindow, IsMaximized), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "bool is_iconized()", asMETHOD(wxTopLevelWindow, IsIconized), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "void request_user_attention(int flags = 1)", asMETHOD(wxTopLevelWindow, RequestUserAttention), asCALL_THISCALL);
+    engine->RegisterObjectMethod(name, "bool enable_close_button(bool enable = true)", asMETHOD(wxTopLevelWindow, EnableCloseButton), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool enable_maximize_button(bool enable = true)", asMETHOD(wxTopLevelWindow, EnableMaximizeButton), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool enable_minimize_button(bool enable = true)", asMETHOD(wxTopLevelWindow, EnableMinimizeButton), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void request_user_attention(wx_user_attention flags = WX_USER_ATTENTION_INFO)", asMETHOD(wxTopLevelWindow, RequestUserAttention), asCALL_THISCALL);
 
 #define REG_CONTROL_METHODS(name) \
     engine->RegisterObjectMethod(name, "string get_label()", asFUNCTION(wx_control_get_label), asCALL_CDECL_OBJFIRST); \
@@ -338,6 +342,10 @@ engine->RegisterEnum("wx_sizer_flag");
     engine->RegisterEnum("wx_style");
     engine->RegisterEnumValue("wx_style", "WX_TE_MULTILINE", wxTE_MULTILINE);
     engine->RegisterEnumValue("wx_style", "WX_TE_READONLY", wxTE_READONLY);
+
+    engine->RegisterEnum("wx_user_attention");
+    engine->RegisterEnumValue("wx_user_attention", "WX_USER_ATTENTION_INFO", wxUSER_ATTENTION_INFO);
+    engine->RegisterEnumValue("wx_user_attention", "WX_USER_ATTENTION_ERROR", wxUSER_ATTENTION_ERROR);
 
     engine->RegisterFuncdef("void wx_callback()");
 
