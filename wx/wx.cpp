@@ -195,15 +195,16 @@ public:
             delete loop;
         }
     }
-
-    wxFrame* create_frame(const std::string& title, int w, int h) {
-        wxFrame* f = new wxFrame(NULL, wxID_ANY, wxString::FromUTF8(title.c_str()), wxDefaultPosition, wxSize(w, h));
+    wxFrame* create_frame(const std::string& title, int w, int h, long style = wxDEFAULT_FRAME_STYLE) {
+        wxFrame* f = new wxFrame(NULL, wxID_ANY, wxString::FromUTF8(title.c_str()), 
+                                 wxDefaultPosition, wxSize(w, h), style);
         AddRef(f);
         return f;
     }
 
-    wxButton* create_button(wxWindow* parent, const std::string& label) {
-        wxButton* b = new wxButton(parent, wxID_ANY, wxString::FromUTF8(label.c_str()));
+    wxButton* create_button(wxWindow* parent, const std::string& label, long style = 0) {
+        wxButton* b = new wxButton(parent, wxID_ANY, wxString::FromUTF8(label.c_str()), 
+                                   wxDefaultPosition, wxDefaultSize, style);
         AddRef(b);
         return b;
     }
@@ -340,6 +341,42 @@ engine->RegisterEnum("wx_sizer_flag");
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_BUTTON", wxEVT_BUTTON);
 
     engine->RegisterEnum("wx_style");
+//wx_window
+    engine->RegisterEnumValue("wx_style", "WX_BORDER_NONE", wxBORDER_NONE);
+    engine->RegisterEnumValue("wx_style", "WX_BORDER_STATIC", wxBORDER_STATIC);
+    engine->RegisterEnumValue("wx_style", "WX_BORDER_SIMPLE", wxBORDER_SIMPLE);
+    engine->RegisterEnumValue("wx_style", "WX_BORDER_RAISED", wxBORDER_RAISED);
+    engine->RegisterEnumValue("wx_style", "WX_BORDER_SUNKEN", wxBORDER_SUNKEN);
+    engine->RegisterEnumValue("wx_style", "WX_BORDER_THEME", wxBORDER_THEME);
+    engine->RegisterEnumValue("wx_style", "WX_HSCROLL", wxHSCROLL);
+    engine->RegisterEnumValue("wx_style", "WX_VSCROLL", wxVSCROLL);
+    engine->RegisterEnumValue("wx_style", "WX_WANTS_CHARS", wxWANTS_CHARS); 
+    engine->RegisterEnumValue("wx_style", "WX_TAB_TRAVERSAL", wxTAB_TRAVERSAL);
+    engine->RegisterEnumValue("wx_style", "WX_CLIP_CHILDREN", wxCLIP_CHILDREN);
+    engine->RegisterEnumValue("wx_style", "WX_FULL_REPAINT_ON_RESIZE", wxFULL_REPAINT_ON_RESIZE);
+//wx_frame
+    engine->RegisterEnumValue("wx_style", "WX_DEFAULT_FRAME_STYLE", wxDEFAULT_FRAME_STYLE);
+    engine->RegisterEnumValue("wx_style", "WX_ICONIZE", wxICONIZE);
+    engine->RegisterEnumValue("wx_style", "WX_MINIMIZE", wxMINIMIZE);
+    engine->RegisterEnumValue("wx_style", "WX_MAXIMIZE", wxMAXIMIZE);
+    engine->RegisterEnumValue("wx_style", "WX_CAPTION", wxCAPTION);
+    engine->RegisterEnumValue("wx_style", "WX_CLOSE_BOX", wxCLOSE_BOX);
+    engine->RegisterEnumValue("wx_style", "WX_MINIMIZE_BOX", wxMINIMIZE_BOX);
+    engine->RegisterEnumValue("wx_style", "WX_MAXIMIZE_BOX", wxMAXIMIZE_BOX);
+    engine->RegisterEnumValue("wx_style", "WX_RESIZE_BORDER", wxRESIZE_BORDER);
+    engine->RegisterEnumValue("wx_style", "WX_SYSTEM_MENU", wxSYSTEM_MENU);
+    engine->RegisterEnumValue("wx_style", "WX_STAY_ON_TOP", wxSTAY_ON_TOP);
+    engine->RegisterEnumValue("wx_style", "WX_FRAME_TOOL_WINDOW", wxFRAME_TOOL_WINDOW);
+    engine->RegisterEnumValue("wx_style", "WX_FRAME_NO_TASKBAR", wxFRAME_NO_TASKBAR);
+    engine->RegisterEnumValue("wx_style", "WX_NO_BORDER", wxNO_BORDER);
+//wx_button
+    engine->RegisterEnumValue("wx_style", "WX_BU_LEFT", wxBU_LEFT);
+    engine->RegisterEnumValue("wx_style", "WX_BU_RIGHT", wxBU_RIGHT);
+    engine->RegisterEnumValue("wx_style", "WX_BU_TOP", wxBU_TOP);
+    engine->RegisterEnumValue("wx_style", "WX_BU_BOTTOM", wxBU_BOTTOM);
+    engine->RegisterEnumValue("wx_style", "WX_BU_EXACTFIT", wxBU_EXACTFIT);
+    engine->RegisterEnumValue("wx_style", "WX_BU_NOTEXT", wxBU_NOTEXT);
+
     engine->RegisterEnumValue("wx_style", "WX_TE_MULTILINE", wxTE_MULTILINE);
     engine->RegisterEnumValue("wx_style", "WX_TE_READONLY", wxTE_READONLY);
 
@@ -373,8 +410,10 @@ engine->RegisterEnum("wx_sizer_flag");
     engine->RegisterObjectBehaviour("wx", asBEHAVE_DESTRUCT, "void f()", asFUNCTION(WxDestructor), asCALL_CDECL_OBJLAST);
     
     engine->RegisterObjectMethod("wx", "void update()", asMETHOD(WxManager, update), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx", "wx_frame@ create_frame(const string &in, int, int)", asMETHOD(WxManager, create_frame), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx", "wx_button@ create_button(wx_window@, const string &in)", asMETHOD(WxManager, create_button), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_frame@ create_frame(const string &in, int, int, int style = WX_DEFAULT_FRAME_STYLE)", 
+    asMETHOD(WxManager, create_frame), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_button@ create_button(wx_window@, const string &in, int style = 0)", 
+    asMETHOD(WxManager, create_button), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_box_sizer@ create_box_sizer(int)", asMETHOD(WxManager, create_box_sizer), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_panel@ create_panel(wx_window@)", asMETHOD(WxManager, create_panel), asCALL_THISCALL);
     return true;
