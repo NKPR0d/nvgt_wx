@@ -218,7 +218,9 @@ void wx_text_entry_undo(wxWindow* self) {
 void wx_text_entry_redo(wxWindow* self) {
     if (auto e = GetEntry(self)) e->Redo();
 }
-
+bool wx_text_entry_can_copy(wxWindow* self) { auto e = GetEntry(self); return e ? e->CanCopy() : false; }
+bool wx_text_entry_can_cut(wxWindow* self) { auto e = GetEntry(self); return e ? e->CanCut() : false; }
+bool wx_text_entry_can_paste(wxWindow* self) { auto e = GetEntry(self); return e ? e->CanPaste() : false; }
 bool wx_text_entry_can_undo(wxWindow* self) {
     auto e = GetEntry(self);
     return e ? e->CanUndo() : false;
@@ -227,6 +229,16 @@ bool wx_text_entry_can_undo(wxWindow* self) {
 bool wx_text_entry_can_redo(wxWindow* self) {
     auto e = GetEntry(self);
     return e ? e->CanRedo() : false;
+}
+
+std::string wx_text_entry_get_range(wxWindow* self, int from, int to) {
+    auto e = GetEntry(self);
+    return e ? std::string(e->GetRange((long)from, (long)to).utf8_str()) : "";
+}
+
+std::string wx_text_entry_get_string_selection(wxWindow* self) {
+    auto e = GetEntry(self);
+    return e ? std::string(e->GetStringSelection().utf8_str()) : "";
 }
 
 void wx_text_entry_get_selection(wxWindow* self, int& from, int& to) {
@@ -240,6 +252,37 @@ void wx_text_entry_get_selection(wxWindow* self, int& from, int& to) {
 
 void wx_text_entry_set_selection(wxWindow* self, int from, int to) {
     if (auto e = GetEntry(self)) e->SetSelection((long)from, (long)to);
+}
+
+bool wx_text_entry_is_editable(wxWindow* self) { 
+    auto e = GetEntry(self); 
+    return e ? e->IsEditable() : false; 
+}
+
+void wx_text_entry_set_editable(wxWindow* self, bool editable) { 
+    if (auto e = GetEntry(self)) e->SetEditable(editable); 
+}
+
+bool wx_text_entry_is_empty(wxWindow* self) { 
+    auto e = GetEntry(self); 
+    return e ? e->IsEmpty() : false; 
+}
+
+void wx_text_entry_replace(wxWindow* self, int from, int to, const std::string& value) {
+    if (auto e = GetEntry(self)) 
+        e->Replace((long)from, (long)to, wxString::FromUTF8(value.c_str()));
+}
+
+void wx_text_entry_select_all(wxWindow* self) { 
+    if (auto e = GetEntry(self)) e->SelectAll(); 
+}
+
+void wx_text_entry_select_none(wxWindow* self) { 
+    if (auto e = GetEntry(self)) e->SelectNone(); 
+}
+
+void wx_text_entry_set_max_length(wxWindow* self, int len) { 
+    if (auto e = GetEntry(self)) e->SetMaxLength((unsigned long)len); 
 }
 
 class NVGTApp : public wxApp {
@@ -386,10 +429,22 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
     engine->RegisterObjectMethod(name, "void remove(int, int)", asFUNCTION(wx_text_entry_remove), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void undo()", asFUNCTION(wx_text_entry_undo), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void redo()", asFUNCTION(wx_text_entry_redo), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool can_copy()", asFUNCTION(wx_text_entry_can_copy), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool can_cut()", asFUNCTION(wx_text_entry_can_cut), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool can_paste()", asFUNCTION(wx_text_entry_can_paste), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool can_undo()", asFUNCTION(wx_text_entry_can_undo), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool can_redo()", asFUNCTION(wx_text_entry_can_redo), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "string get_range(int, int)", asFUNCTION(wx_text_entry_get_range), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "string get_string_selection()", asFUNCTION(wx_text_entry_get_string_selection), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void get_selection(int &out, int &out)", asFUNCTION(wx_text_entry_get_selection), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_selection(int, int)", asFUNCTION(wx_text_entry_set_selection), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod(name, "void set_selection(int, int)", asFUNCTION(wx_text_entry_set_selection), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool is_editable()", asFUNCTION(wx_text_entry_is_editable), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_editable(bool)", asFUNCTION(wx_text_entry_set_editable), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool is_empty()", asFUNCTION(wx_text_entry_is_empty), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void replace(int, int, const string &in)", asFUNCTION(wx_text_entry_replace), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void select_all()", asFUNCTION(wx_text_entry_select_all), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void select_none()", asFUNCTION(wx_text_entry_select_none), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_max_length(int)", asFUNCTION(wx_text_entry_set_max_length), asCALL_CDECL_OBJFIRST);
 
 #define REGISTER_WX_WINDOW(as_name, wx_type) \
     engine->RegisterObjectType(as_name, 0, asOBJ_REF); \
@@ -542,6 +597,7 @@ plugin_main(nvgt_plugin_shared* shared) {
 
     REGISTER_WX_CONTROL("wx_button", wxButton);
     REGISTER_WX_CONTROL("wx_static_text", wxStaticText);
+    engine->RegisterObjectMethod("wx_static_text", "void wrap(int width)", asMETHOD(wxStaticText, Wrap), asCALL_THISCALL);
 
     engine->RegisterObjectType("wx", sizeof(WxManager), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_C);
     engine->RegisterObjectBehaviour("wx", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(WxConstructor), asCALL_CDECL_OBJLAST);
