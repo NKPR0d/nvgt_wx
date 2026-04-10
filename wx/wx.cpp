@@ -166,6 +166,22 @@ void wx_sizer_add_sizer(wxSizer* self, wxSizer* sizer, int proportion, int flag,
     if (self && sizer) self->Add(sizer, proportion, flag, border);
 }
 
+void wx_text_ctrl_set_value(wxTextCtrl* self, const std::string& value) {
+    if (self) self->SetValue(wxString::FromUTF8(value.c_str()));
+}
+
+std::string wx_text_ctrl_get_value(wxTextCtrl* self) {
+    return self ? std::string(self->GetValue().utf8_str()) : "";
+}
+
+void wx_text_ctrl_write_text(wxTextCtrl* self, const std::string& text) {
+    if (self) self->WriteText(wxString::FromUTF8(text.c_str()));
+}
+
+void wx_text_ctrl_append_text(wxTextCtrl* self, const std::string& text) {
+    if (self) self->AppendText(wxString::FromUTF8(text.c_str()));
+}
+
 class NVGTApp : public wxApp {
 public:
     bool OnInit() override { return true; }
@@ -219,10 +235,25 @@ public:
         AddRef(b);
         return b;
     }
-    wxPanel* create_panel(wxWindow* parent) {
-        wxPanel* p = new wxPanel(parent, wxID_ANY);
+
+    wxPanel* create_panel(wxWindow* parent, long style = wxTAB_TRAVERSAL) {
+        wxPanel* p = new wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, style);
         AddRef(p);
         return p;
+    }
+
+    wxStaticText* create_static_text(wxWindow* parent, const std::string& label, long style = 0) {
+        wxStaticText* t = new wxStaticText(parent, wxID_ANY, wxString::FromUTF8(label.c_str()), 
+                                           wxDefaultPosition, wxDefaultSize, style);
+        AddRef(t);
+        return t;
+    }
+
+    wxTextCtrl* create_text_ctrl(wxWindow* parent, const std::string& value = "", long style = 0) {
+        wxTextCtrl* t = new wxTextCtrl(parent, wxID_ANY, wxString::FromUTF8(value.c_str()), 
+                                       wxDefaultPosition, wxDefaultSize, style);
+        AddRef(t);
+        return t;
     }
 };
 
@@ -279,8 +310,8 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
     engine->RegisterObjectMethod(name, "void set_label(const string &in)", asFUNCTION(wx_control_set_label), asCALL_CDECL_OBJFIRST); \
 
 #define REG_SIZER_METHODS(name) \
-    engine->RegisterObjectMethod(name, "void add(wx_window@, int proportion = 0, wx_sizer_flag flag = 0, int border = 0)", asFUNCTION(wx_sizer_add_window), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void add(wx_sizer@, int proportion = 0, wx_sizer_flag flag = 0, int border = 0)", asFUNCTION(wx_sizer_add_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void add(wx_window@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_add_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void add(wx_sizer@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_add_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void layout()", asMETHOD(wxSizer, Layout), asCALL_THISCALL);
 
 #define REGISTER_WX_WINDOW(as_name, wx_type) \
@@ -327,24 +358,32 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterEnumValue("wx_orientation", "WX_HORIZONTAL", wxHORIZONTAL);
     engine->RegisterEnumValue("wx_orientation", "WX_BOTH", wxBOTH);
 
+    engine->RegisterEnum("wx_direction");
+    engine->RegisterEnumValue("wx_direction", "WX_LEFT", wxLEFT);
+    engine->RegisterEnumValue("wx_direction", "WX_RIGHT", wxRIGHT);
+    engine->RegisterEnumValue("wx_direction", "WX_TOP", wxTOP);
+    engine->RegisterEnumValue("wx_direction", "WX_BOTTOM", wxBOTTOM);
+    engine->RegisterEnumValue("wx_direction", "WX_ALL", wxALL);
+
+    engine->RegisterEnum("wx_alignment");
+    engine->RegisterEnumValue("wx_alignment", "WX_ALIGN_LEFT", wxALIGN_LEFT);
+    engine->RegisterEnumValue("wx_alignment", "WX_ALIGN_RIGHT", wxALIGN_RIGHT);
+    engine->RegisterEnumValue("wx_alignment", "WX_ALIGN_TOP", wxALIGN_TOP);
+    engine->RegisterEnumValue("wx_alignment", "WX_ALIGN_BOTTOM", wxALIGN_BOTTOM);
+    engine->RegisterEnumValue("wx_alignment", "WX_ALIGN_CENTER", wxALIGN_CENTER);
+    engine->RegisterEnumValue("wx_alignment", "WX_ALIGN_CENTER_HORIZONTAL", wxALIGN_CENTER_HORIZONTAL);
+    engine->RegisterEnumValue("wx_alignment", "WX_ALIGN_CENTER_VERTICAL", wxALIGN_CENTER_VERTICAL);
+
     engine->RegisterEnum("wx_sizer_flag");
-    engine->RegisterEnumValue("wx_sizer_flag", "WX_LEFT", wxLEFT);
-    engine->RegisterEnumValue("wx_sizer_flag", "WX_RIGHT", wxRIGHT);
-    engine->RegisterEnumValue("wx_sizer_flag", "WX_TOP", wxTOP);
-    engine->RegisterEnumValue("wx_sizer_flag", "WX_BOTTOM", wxBOTTOM);
-    engine->RegisterEnumValue("wx_sizer_flag", "WX_ALL", wxALL);
     engine->RegisterEnumValue("wx_sizer_flag", "WX_EXPAND", wxEXPAND);
     engine->RegisterEnumValue("wx_sizer_flag", "WX_SHAPED", wxSHAPED);
     engine->RegisterEnumValue("wx_sizer_flag", "WX_FIXED_MINSIZE", wxFIXED_MINSIZE);
     engine->RegisterEnumValue("wx_sizer_flag", "WX_RESERVE_SPACE_EVEN_IF_HIDDEN", wxRESERVE_SPACE_EVEN_IF_HIDDEN);
-    engine->RegisterEnumValue("wx_sizer_flag", "WX_ALIGN_CENTER", wxALIGN_CENTER);
-    engine->RegisterEnumValue("wx_sizer_flag", "WX_ALIGN_LEFT", wxALIGN_LEFT);
-    engine->RegisterEnumValue("wx_sizer_flag", "WX_ALIGN_RIGHT", wxALIGN_RIGHT);
-    engine->RegisterEnumValue("wx_sizer_flag", "WX_ALIGN_TOP", wxALIGN_TOP);
-    engine->RegisterEnumValue("wx_sizer_flag", "WX_ALIGN_BOTTOM", wxALIGN_BOTTOM);
 
     engine->RegisterEnum("wx_event_type");
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_BUTTON", wxEVT_BUTTON);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_TEXT", wxEVT_TEXT);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_TEXT_ENTER", wxEVT_TEXT_ENTER);
 
     engine->RegisterEnum("wx_style");
 //wx_window
@@ -382,9 +421,11 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterEnumValue("wx_style", "WX_BU_BOTTOM", wxBU_BOTTOM);
     engine->RegisterEnumValue("wx_style", "WX_BU_EXACTFIT", wxBU_EXACTFIT);
     engine->RegisterEnumValue("wx_style", "WX_BU_NOTEXT", wxBU_NOTEXT);
-
+//wx_text_control
     engine->RegisterEnumValue("wx_style", "WX_TE_MULTILINE", wxTE_MULTILINE);
+    engine->RegisterEnumValue("wx_style", "WX_TE_PASSWORD", wxTE_PASSWORD);
     engine->RegisterEnumValue("wx_style", "WX_TE_READONLY", wxTE_READONLY);
+    engine->RegisterEnumValue("wx_style", "WX_TE_PROCESS_ENTER", wxTE_PROCESS_ENTER);
 
     engine->RegisterEnum("wx_user_attention");
     engine->RegisterEnumValue("wx_user_attention", "WX_USER_ATTENTION_INFO", wxUSER_ATTENTION_INFO);
@@ -410,6 +451,13 @@ plugin_main(nvgt_plugin_shared* shared) {
     REGISTER_WX_WINDOW("wx_panel", wxPanel);
 
     REGISTER_WX_CONTROL("wx_button", wxButton);
+    REGISTER_WX_CONTROL("wx_static_text", wxStaticText);
+    REGISTER_WX_CONTROL("wx_text_ctrl", wxTextCtrl);
+    engine->RegisterObjectMethod("wx_text_ctrl", "string get_value()", asFUNCTION(wx_text_ctrl_get_value), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_ctrl", "void set_value(const string &in)", asFUNCTION(wx_text_ctrl_set_value), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_ctrl", "void write_text(const string &in)", asFUNCTION(wx_text_ctrl_write_text), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_ctrl", "void append_text(const string &in)", asFUNCTION(wx_text_ctrl_append_text), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_ctrl", "void clear()", asMETHOD(wxTextCtrl, Clear), asCALL_THISCALL);
 
     engine->RegisterObjectType("wx", sizeof(WxManager), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_C);
     engine->RegisterObjectBehaviour("wx", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(WxConstructor), asCALL_CDECL_OBJLAST);
@@ -421,6 +469,9 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterObjectMethod("wx", "wx_button@ create_button(wx_window@, const string &in, int style = 0)", 
     asMETHOD(WxManager, create_button), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_box_sizer@ create_box_sizer(int)", asMETHOD(WxManager, create_box_sizer), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx", "wx_panel@ create_panel(wx_window@)", asMETHOD(WxManager, create_panel), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_panel@ create_panel(wx_window@, int style = WX_TAB_TRAVERSAL)", 
+    asMETHOD(WxManager, create_panel), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_static_text@ create_static_text(wx_window@, const string &in, int style = 0)", asMETHOD(WxManager, create_static_text), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_text_ctrl@ create_text_ctrl(wx_window@, const string &in = \"\", int style = 0)", asMETHOD(WxManager, create_text_ctrl), asCALL_THISCALL);
     return true;
 }
