@@ -328,7 +328,6 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterEnumValue("wx_orientation", "WX_BOTH", wxBOTH);
 
     engine->RegisterEnum("wx_sizer_flag");
-engine->RegisterEnum("wx_sizer_flag");
     engine->RegisterEnumValue("wx_sizer_flag", "WX_LEFT", wxLEFT);
     engine->RegisterEnumValue("wx_sizer_flag", "WX_RIGHT", wxRIGHT);
     engine->RegisterEnumValue("wx_sizer_flag", "WX_TOP", wxTOP);
@@ -336,6 +335,8 @@ engine->RegisterEnum("wx_sizer_flag");
     engine->RegisterEnumValue("wx_sizer_flag", "WX_ALL", wxALL);
     engine->RegisterEnumValue("wx_sizer_flag", "WX_EXPAND", wxEXPAND);
     engine->RegisterEnumValue("wx_sizer_flag", "WX_SHAPED", wxSHAPED);
+    engine->RegisterEnumValue("wx_sizer_flag", "WX_FIXED_MINSIZE", wxFIXED_MINSIZE);
+    engine->RegisterEnumValue("wx_sizer_flag", "WX_RESERVE_SPACE_EVEN_IF_HIDDEN", wxRESERVE_SPACE_EVEN_IF_HIDDEN);
     engine->RegisterEnumValue("wx_sizer_flag", "WX_ALIGN_CENTER", wxALIGN_CENTER);
     engine->RegisterEnumValue("wx_sizer_flag", "WX_ALIGN_LEFT", wxALIGN_LEFT);
     engine->RegisterEnumValue("wx_sizer_flag", "WX_ALIGN_RIGHT", wxALIGN_RIGHT);
