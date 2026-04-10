@@ -68,6 +68,7 @@ template<typename T> wxWindow* to_window(T* obj) { if (obj) AddRef(obj); return 
 template<typename T> wxControl* to_control(T* obj) { if (obj) AddRef(obj); return static_cast<wxControl*>(obj); }
 template<typename T> wxSizer* to_sizer(T* obj) { if (obj) AddRef(obj); return static_cast<wxSizer*>(obj); }
 template<typename T> wxTopLevelWindow* to_tlw(T* obj) { if (obj) AddRef(obj); return static_cast<wxTopLevelWindow*>(obj); }
+template<typename T> wxWindow* to_text_entry_as_win(T* obj) { if (obj) AddRef(obj); return static_cast<wxWindow*>(obj); }
 
 void OnWxEvent(wxEvent& event) {
     void* self = event.GetEventObject();
@@ -166,20 +167,79 @@ void wx_sizer_add_sizer(wxSizer* self, wxSizer* sizer, int proportion, int flag,
     if (self && sizer) self->Add(sizer, proportion, flag, border);
 }
 
-void wx_text_ctrl_set_value(wxTextCtrl* self, const std::string& value) {
-    if (self) self->SetValue(wxString::FromUTF8(value.c_str()));
+wxTextEntry* GetEntry(wxWindow* win) {
+    return dynamic_cast<wxTextEntry*>(win);
 }
 
-std::string wx_text_ctrl_get_value(wxTextCtrl* self) {
-    return self ? std::string(self->GetValue().utf8_str()) : "";
+std::string wx_text_entry_get_value(wxWindow* self) {
+    auto e = GetEntry(self);
+    return e ? std::string(e->GetValue().utf8_str()) : "";
 }
 
-void wx_text_ctrl_write_text(wxTextCtrl* self, const std::string& text) {
-    if (self) self->WriteText(wxString::FromUTF8(text.c_str()));
+void wx_text_entry_set_value(wxWindow* self, const std::string& value) {
+    if (auto e = GetEntry(self)) 
+        e->SetValue(wxString::FromUTF8(value.c_str()));
 }
 
-void wx_text_ctrl_append_text(wxTextCtrl* self, const std::string& text) {
-    if (self) self->AppendText(wxString::FromUTF8(text.c_str()));
+void wx_text_entry_write_text(wxWindow* self, const std::string& text) {
+    if (auto e = GetEntry(self)) 
+        e->WriteText(wxString::FromUTF8(text.c_str()));
+}
+
+void wx_text_entry_append_text(wxWindow* self, const std::string& text) {
+    if (auto e = GetEntry(self)) 
+        e->AppendText(wxString::FromUTF8(text.c_str()));
+}
+
+void wx_text_entry_clear(wxWindow* self) {
+    if (auto e = GetEntry(self)) 
+        e->Clear();
+}
+void wx_text_entry_copy(wxWindow* self) {
+    if (auto e = GetEntry(self)) e->Copy();
+}
+
+void wx_text_entry_cut(wxWindow* self) {
+    if (auto e = GetEntry(self)) e->Cut();
+}
+
+void wx_text_entry_paste(wxWindow* self) {
+    if (auto e = GetEntry(self)) e->Paste();
+}
+
+void wx_text_entry_remove(wxWindow* self, int from, int to) {
+    if (auto e = GetEntry(self)) e->Remove((long)from, (long)to);
+}
+
+void wx_text_entry_undo(wxWindow* self) {
+    if (auto e = GetEntry(self)) e->Undo();
+}
+
+void wx_text_entry_redo(wxWindow* self) {
+    if (auto e = GetEntry(self)) e->Redo();
+}
+
+bool wx_text_entry_can_undo(wxWindow* self) {
+    auto e = GetEntry(self);
+    return e ? e->CanUndo() : false;
+}
+
+bool wx_text_entry_can_redo(wxWindow* self) {
+    auto e = GetEntry(self);
+    return e ? e->CanRedo() : false;
+}
+
+void wx_text_entry_get_selection(wxWindow* self, int& from, int& to) {
+    if (auto e = GetEntry(self)) {
+        long f, t;
+        e->GetSelection(&f, &t);
+        from = (int)f;
+        to = (int)t;
+    }
+}
+
+void wx_text_entry_set_selection(wxWindow* self, int from, int to) {
+    if (auto e = GetEntry(self)) e->SetSelection((long)from, (long)to);
 }
 
 class NVGTApp : public wxApp {
@@ -314,6 +374,23 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
     engine->RegisterObjectMethod(name, "void add(wx_sizer@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_add_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void layout()", asMETHOD(wxSizer, Layout), asCALL_THISCALL);
 
+#define REG_TEXT_ENTRY_METHODS(name) \
+    engine->RegisterObjectMethod(name, "string get_value()", asFUNCTION(wx_text_entry_get_value), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_value(const string &in)", asFUNCTION(wx_text_entry_set_value), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void write_text(const string &in)", asFUNCTION(wx_text_entry_write_text), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void append_text(const string &in)", asFUNCTION(wx_text_entry_append_text), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void clear()", asFUNCTION(wx_text_entry_clear), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void copy()", asFUNCTION(wx_text_entry_copy), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void cut()", asFUNCTION(wx_text_entry_cut), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void paste()", asFUNCTION(wx_text_entry_paste), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void remove(int, int)", asFUNCTION(wx_text_entry_remove), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void undo()", asFUNCTION(wx_text_entry_undo), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void redo()", asFUNCTION(wx_text_entry_redo), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool can_undo()", asFUNCTION(wx_text_entry_can_undo), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool can_redo()", asFUNCTION(wx_text_entry_can_redo), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void get_selection(int &out, int &out)", asFUNCTION(wx_text_entry_get_selection), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_selection(int, int)", asFUNCTION(wx_text_entry_set_selection), asCALL_CDECL_OBJFIRST);
+
 #define REGISTER_WX_WINDOW(as_name, wx_type) \
     engine->RegisterObjectType(as_name, 0, asOBJ_REF); \
     REG_BASE_REF(as_name); \
@@ -341,6 +418,16 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
     engine->RegisterObjectMethod(as_name, "wx_window@ opImplCast()", asFUNCTION(to_window<wx_type>), asCALL_CDECL_OBJFIRST); \
     REG_WINDOW_METHODS(as_name); \
     REG_CONTROL_METHODS(as_name);
+
+#define REGISTER_WX_TEXT_CONTROL(as_name, wx_type) \
+    engine->RegisterObjectType(as_name, 0, asOBJ_REF); \
+    REG_BASE_REF(as_name); \
+    engine->RegisterObjectMethod(as_name, "wx_control@ opImplCast()", asFUNCTION(to_control<wx_type>), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(as_name, "wx_window@ opImplCast()", asFUNCTION(to_window<wx_type>), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(as_name, "wx_text_entry@ opImplCast()", asFUNCTION(to_text_entry_as_win<wx_type>), asCALL_CDECL_OBJFIRST); \
+    REG_WINDOW_METHODS(as_name); \
+    REG_CONTROL_METHODS(as_name); \
+    REG_TEXT_ENTRY_METHODS(as_name);
 
 #define REGISTER_WX_SIZER(as_name, wx_type) \
     engine->RegisterObjectType(as_name, 0, asOBJ_REF); \
@@ -436,13 +523,16 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterObjectType("wx_window", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_top_level_window", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_control", 0, asOBJ_REF);
+    engine->RegisterObjectType("wx_text_entry", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_sizer", 0, asOBJ_REF);
 
     REGISTER_WX_WINDOW("wx_window", wxWindow);
 
     REGISTER_WX_TLW("wx_top_level_window", wxTopLevelWindow);
     REGISTER_WX_CONTROL("wx_control", wxControl);
-
+    REG_BASE_REF("wx_text_entry");
+    REG_TEXT_ENTRY_METHODS("wx_text_entry");
+    REGISTER_WX_TEXT_CONTROL("wx_text_ctrl", wxTextCtrl);
     REGISTER_WX_SIZER("wx_sizer", wxSizer);
 
     REGISTER_WX_SIZER("wx_box_sizer", wxBoxSizer);
@@ -452,12 +542,6 @@ plugin_main(nvgt_plugin_shared* shared) {
 
     REGISTER_WX_CONTROL("wx_button", wxButton);
     REGISTER_WX_CONTROL("wx_static_text", wxStaticText);
-    REGISTER_WX_CONTROL("wx_text_ctrl", wxTextCtrl);
-    engine->RegisterObjectMethod("wx_text_ctrl", "string get_value()", asFUNCTION(wx_text_ctrl_get_value), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_text_ctrl", "void set_value(const string &in)", asFUNCTION(wx_text_ctrl_set_value), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_text_ctrl", "void write_text(const string &in)", asFUNCTION(wx_text_ctrl_write_text), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_text_ctrl", "void append_text(const string &in)", asFUNCTION(wx_text_ctrl_append_text), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_text_ctrl", "void clear()", asMETHOD(wxTextCtrl, Clear), asCALL_THISCALL);
 
     engine->RegisterObjectType("wx", sizeof(WxManager), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_C);
     engine->RegisterObjectBehaviour("wx", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(WxConstructor), asCALL_CDECL_OBJLAST);
