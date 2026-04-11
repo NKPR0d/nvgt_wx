@@ -13,8 +13,7 @@ if plugin_env["PLATFORM"] == "win32":
     
     plugin_env.Append(LIBS=[
         "wxmsw33u_core", 
-        "wxbase33u", 
-        "comctl32", "rpcrt4", "shlwapi", "version", "ws2_32", "windowscodecs", "uxtheme"
+        "wxbase33u"
     ])
     
     plugin_env.Append(CPPDEFINES=[
