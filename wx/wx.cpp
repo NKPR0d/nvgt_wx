@@ -30,6 +30,19 @@ std::map<void*, int> g_ref_counts;
 typedef std::pair<void*, int> EventKey;
 std::map<EventKey, ScriptEventData> g_event_handlers;
 
+void CleanupHandlersFor(void* ptr) {
+    for (auto it = g_event_handlers.begin(); it != g_event_handlers.end(); ) {
+        if (it->first.first == ptr) {
+            if (it->second.callback) {
+                it->second.callback->Release();
+            }
+            it = g_event_handlers.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 void AddRef(void* ptr) {
     if (!ptr) return;
     if (g_ref_counts.find(ptr) == g_ref_counts.end()) {
@@ -41,47 +54,67 @@ asAtomicInc(g_ref_counts[ptr]);
 
 void Release(void* ptr) {
     if (!ptr) return;
-    if (asAtomicDec(g_ref_counts[ptr]) <= 0) {
-        g_ref_counts.erase(ptr);
-        for (auto it = g_event_handlers.begin(); it != g_event_handlers.end(); ) {
-            if (it->first.first == ptr) {
-                it->second.callback->Release();
-                it = g_event_handlers.erase(it);
-            } else {
-                ++it;
-            }
-        }
+    auto it = g_ref_counts.find(ptr);
+    if (it == g_ref_counts.end()) return; 
+    if (asAtomicDec(it->second) <= 0) {
+        g_ref_counts.erase(it);
+        CleanupHandlersFor(ptr);
         wxObject* wx_obj = static_cast<wxObject*>(ptr);
-        wxWindow* win = dynamic_cast<wxWindow*>(wx_obj);
-        if (win) {
-            if (!win->GetParent()) win->Destroy();
-            return;
-        }
-        wxSizer* sizer = dynamic_cast<wxSizer*>(wx_obj);
-        if (sizer) {
-            delete sizer;
+        if (wx_obj->IsKindOf(CLASSINFO(wxWindow))) {
+            wxWindow* win = static_cast<wxWindow*>(wx_obj);
+            if (win && !win->GetParent()) {
+                win->Destroy();
+            }
+        } 
+        else if (wx_obj->IsKindOf(CLASSINFO(wxSizer))) {
+            wxSizer* sizer = static_cast<wxSizer*>(wx_obj);
+            if (sizer && !sizer->GetContainingWindow()) {
+                delete sizer;
+            }
         }
     }
 }
+class ContextGuard {
+    asIScriptContext* ctx;
+public:
+    ContextGuard(asIScriptEngine* eng) {
+        ctx = GetContextFromPool(eng);
+    }
+    ~ContextGuard() {
+        if (ctx) ReturnContextToPool(ctx);
+    }
+    asIScriptContext* get() { return ctx; }
+};
 
-template<typename T> wxWindow* to_window(T* obj) { if (obj) AddRef(obj); return static_cast<wxWindow*>(obj); }
-template<typename T> wxControl* to_control(T* obj) { if (obj) AddRef(obj); return static_cast<wxControl*>(obj); }
-template<typename T> wxSizer* to_sizer(T* obj) { if (obj) AddRef(obj); return static_cast<wxSizer*>(obj); }
-template<typename T> wxTopLevelWindow* to_tlw(T* obj) { if (obj) AddRef(obj); return static_cast<wxTopLevelWindow*>(obj); }
-template<typename T> wxWindow* to_text_entry_as_win(T* obj) { if (obj) AddRef(obj); return static_cast<wxWindow*>(obj); }
+template<typename T> wxWindow* to_window(T* obj) { return static_cast<wxWindow*>(obj); }
+template<typename T> wxControl* to_control(T* obj) { return static_cast<wxControl*>(obj); }
+template<typename T> wxSizer* to_sizer(T* obj) { return static_cast<wxSizer*>(obj); }
+template<typename T> wxTopLevelWindow* to_tlw(T* obj) { return static_cast<wxTopLevelWindow*>(obj); }
+template<typename T> wxWindow* to_text_entry_as_win(T* obj) { return static_cast<wxWindow*>(obj); }
+
+void OnObjectDestroyed(wxWindowDestroyEvent& event) {
+    void* ptr = event.GetEventObject();    
+    CleanupHandlersFor(ptr);
+    g_ref_counts.erase(ptr);
+}
+
+template<typename T>
+T* Track(T* obj) {
+    if (obj) {
+        wxWindow* win = dynamic_cast<wxWindow*>(obj);
+        if (win) win->Bind(wxEVT_DESTROY, &OnObjectDestroyed);
+        AddRef(obj);
+    }
+    return obj;
+}
 
 void OnWxEvent(wxEvent& event) {
-    void* self = event.GetEventObject();
-    int type = event.GetEventType();    
-    EventKey key = { self, type };
-    auto it = g_event_handlers.find(key);
+    auto it = g_event_handlers.find({event.GetEventObject(), event.GetEventType()});
     if (it != g_event_handlers.end()) {
-        ScriptEventData& data = it->second;
-        asIScriptContext* ctx = GetContextFromPool(data.engine);
-        if (ctx) {
-            ctx->Prepare(data.callback);
+        ContextGuard guard(it->second.engine);
+        if (auto ctx = guard.get()) {
+            ctx->Prepare(it->second.callback);
             ctx->Execute();
-            ReturnContextToPool(ctx);
         }
     }
     event.Skip();
@@ -304,33 +337,23 @@ public:
     void update() {
         if (!wxTheApp) return;
         wxTheApp->ProcessPendingEvents();
-        wxEventLoopBase *loop = wxEventLoop::GetActive();
-        bool created = false;
-        if (!loop) {
-            loop = new wxGUIEventLoop();
-            wxEventLoop::SetActive(loop);
-            created = true;
+#ifdef _WIN32
+        MSG msg;
+        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+            HWND active_hwnd = GetActiveWindow();
+            if (active_hwnd && IsDialogMessage(active_hwnd, &msg)) continue;
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
         }
-        while (loop && loop->Pending()) {
-            loop->Dispatch();
-        }
-        if (created) {
-            wxEventLoop::SetActive(NULL);
-            delete loop;
-        }
+#endif
     }
+
     wxFrame* create_frame(const std::string& title, int w, int h, long style = wxDEFAULT_FRAME_STYLE) {
-        wxFrame* f = new wxFrame(NULL, wxID_ANY, wxString::FromUTF8(title.c_str()), 
-                                 wxDefaultPosition, wxSize(w, h), style);
-        AddRef(f);
-        return f;
+        return Track(new wxFrame(NULL, wxID_ANY, wxString::FromUTF8(title.c_str()), wxDefaultPosition, wxSize(w, h), style));
     }
 
     wxButton* create_button(wxWindow* parent, const std::string& label, long style = 0) {
-        wxButton* b = new wxButton(parent, wxID_ANY, wxString::FromUTF8(label.c_str()), 
-                                   wxDefaultPosition, wxDefaultSize, style);
-        AddRef(b);
-        return b;
+        return Track(new wxButton(parent, wxID_ANY, wxString::FromUTF8(label.c_str()), wxDefaultPosition, wxDefaultSize, style));
     }
 
     wxBoxSizer* create_box_sizer(int orient) {
@@ -340,23 +363,15 @@ public:
     }
 
     wxPanel* create_panel(wxWindow* parent, long style = wxTAB_TRAVERSAL) {
-        wxPanel* p = new wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, style);
-        AddRef(p);
-        return p;
+        return Track(new wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, style));
     }
 
     wxStaticText* create_static_text(wxWindow* parent, const std::string& label, long style = 0) {
-        wxStaticText* t = new wxStaticText(parent, wxID_ANY, wxString::FromUTF8(label.c_str()), 
-                                           wxDefaultPosition, wxDefaultSize, style);
-        AddRef(t);
-        return t;
+        return Track(new wxStaticText(parent, wxID_ANY, wxString::FromUTF8(label.c_str()), wxDefaultPosition, wxDefaultSize, style));
     }
 
     wxTextCtrl* create_text_control(wxWindow* parent, const std::string& value = "", long style = 0) {
-        wxTextCtrl* t = new wxTextCtrl(parent, wxID_ANY, wxString::FromUTF8(value.c_str()), 
-                                       wxDefaultPosition, wxDefaultSize, style);
-        AddRef(t);
-        return t;
+        return Track(new wxTextCtrl(parent, wxID_ANY, wxString::FromUTF8(value.c_str()), wxDefaultPosition, wxDefaultSize, style));
     }
 };
 
