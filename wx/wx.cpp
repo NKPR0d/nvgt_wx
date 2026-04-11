@@ -352,7 +352,7 @@ public:
         return t;
     }
 
-    wxTextCtrl* create_text_ctrl(wxWindow* parent, const std::string& value = "", long style = 0) {
+    wxTextCtrl* create_text_control(wxWindow* parent, const std::string& value = "", long style = 0) {
         wxTextCtrl* t = new wxTextCtrl(parent, wxID_ANY, wxString::FromUTF8(value.c_str()), 
                                        wxDefaultPosition, wxDefaultSize, style);
         AddRef(t);
@@ -526,6 +526,8 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_BUTTON", wxEVT_BUTTON);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_TEXT", wxEVT_TEXT);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_TEXT_ENTER", wxEVT_TEXT_ENTER);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_TEXT_URL", wxEVT_TEXT_URL);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_TEXT_MAXLEN", wxEVT_TEXT_MAXLEN);
 
     engine->RegisterEnum("wx_style");
 //wx_window
@@ -568,6 +570,18 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterEnumValue("wx_style", "WX_TE_PASSWORD", wxTE_PASSWORD);
     engine->RegisterEnumValue("wx_style", "WX_TE_READONLY", wxTE_READONLY);
     engine->RegisterEnumValue("wx_style", "WX_TE_PROCESS_ENTER", wxTE_PROCESS_ENTER);
+    engine->RegisterEnumValue("wx_style", "WX_TE_PROCESS_TAB", wxTE_PROCESS_TAB);
+    engine->RegisterEnumValue("wx_style", "WX_TE_RICH2", wxTE_RICH2);
+    engine->RegisterEnumValue("wx_style", "WX_TE_AUTO_URL", wxTE_AUTO_URL);
+    engine->RegisterEnumValue("wx_style", "WX_TE_NOHIDESEL", wxTE_NOHIDESEL);
+    engine->RegisterEnumValue("wx_style", "WX_TE_NO_VSCROLL", wxTE_NO_VSCROLL);
+    engine->RegisterEnumValue("wx_style", "WX_TE_LEFT", wxTE_LEFT);
+    engine->RegisterEnumValue("wx_style", "WX_TE_CENTRE", wxTE_CENTRE);
+    engine->RegisterEnumValue("wx_style", "WX_TE_RIGHT", wxTE_RIGHT);
+    engine->RegisterEnumValue("wx_style", "WX_TE_DONTWRAP", wxTE_DONTWRAP);
+    engine->RegisterEnumValue("wx_style", "WX_TE_CHARWRAP", wxTE_CHARWRAP);
+    engine->RegisterEnumValue("wx_style", "WX_TE_WORDWRAP", wxTE_WORDWRAP);
+    engine->RegisterEnumValue("wx_style", "WX_TE_BESTWRAP", wxTE_BESTWRAP);
 
     engine->RegisterEnum("wx_user_attention");
     engine->RegisterEnumValue("wx_user_attention", "WX_USER_ATTENTION_INFO", wxUSER_ATTENTION_INFO);
@@ -587,7 +601,7 @@ plugin_main(nvgt_plugin_shared* shared) {
     REGISTER_WX_CONTROL("wx_control", wxControl);
     REG_BASE_REF("wx_text_entry");
     REG_TEXT_ENTRY_METHODS("wx_text_entry");
-    REGISTER_WX_TEXT_CONTROL("wx_text_ctrl", wxTextCtrl);
+    REGISTER_WX_TEXT_CONTROL("wx_text_control", wxTextCtrl);
     REGISTER_WX_SIZER("wx_sizer", wxSizer);
 
     REGISTER_WX_SIZER("wx_box_sizer", wxBoxSizer);
@@ -612,6 +626,6 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterObjectMethod("wx", "wx_panel@ create_panel(wx_window@, int style = WX_TAB_TRAVERSAL)", 
     asMETHOD(WxManager, create_panel), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_static_text@ create_static_text(wx_window@, const string &in, int style = 0)", asMETHOD(WxManager, create_static_text), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx", "wx_text_ctrl@ create_text_ctrl(wx_window@, const string &in = \"\", int style = 0)", asMETHOD(WxManager, create_text_ctrl), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_text_control@ create_text_control(wx_window@, const string &in = \"\", int style = 0)", asMETHOD(WxManager, create_text_control), asCALL_THISCALL);
     return true;
 }
