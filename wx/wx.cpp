@@ -562,6 +562,11 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterEnumValue("wx_sizer_flag", "WX_RESERVE_SPACE_EVEN_IF_HIDDEN", wxRESERVE_SPACE_EVEN_IF_HIDDEN);
 
     engine->RegisterEnum("wx_event_type");
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_CLOSE_WINDOW", wxEVT_CLOSE_WINDOW);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_ICONIZE", wxEVT_ICONIZE);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_MENU_OPEN", wxEVT_MENU_OPEN);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_MENU_CLOSE", wxEVT_MENU_CLOSE);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_MENU_HIGHLIGHT", wxEVT_MENU_HIGHLIGHT);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_BUTTON", wxEVT_BUTTON);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_TEXT", wxEVT_TEXT);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_TEXT_ENTER", wxEVT_TEXT_ENTER);
