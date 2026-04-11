@@ -370,7 +370,7 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
 #define REG_WINDOW_METHODS(name) \
     engine->RegisterObjectMethod(name, "bool show(bool visible = true)", asMETHOD(wxWindow, Show), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "bool hide()", asMETHOD(wxWindow, Hide), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "bool enable(bool e = true)", asMETHOD(wxWindow, Enable), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool enable(bool enable = true)", asMETHOD(wxWindow, Enable), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "bool disable()", asMETHOD(wxWindow, Disable), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "bool has_focus()", asMETHOD(wxWindow, HasFocus), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void set_focus()", asMETHOD(wxWindow, SetFocus), asCALL_THISCALL); \
@@ -382,21 +382,21 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
     engine->RegisterObjectMethod(name, "bool destroy()", asMETHOD(wxWindow, Destroy), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void bind(wx_event_type, wx_callback@)", asFUNCTION(wx_window_bind), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "string get_tool_tip()", asFUNCTION(wx_window_get_tool_tip), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_tool_tip(const string &in)", asFUNCTION(wx_window_set_tool_tip), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void get_background_colour(int &out, int &out, int &out)", asFUNCTION(wx_window_get_background_colour), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_background_colour(int, int, int)", asFUNCTION(wx_window_set_background_colour), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void get_foreground_colour(int &out, int &out, int &out)", asFUNCTION(wx_window_get_foreground_colour), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_foreground_colour(int, int, int)", asFUNCTION(wx_window_set_foreground_colour), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_tool_tip(const string &in tool_tip)", asFUNCTION(wx_window_set_tool_tip), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void get_background_colour(int &out r, int &out g, int &out b)", asFUNCTION(wx_window_get_background_colour), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_background_colour(int r, int g, int b)", asFUNCTION(wx_window_set_background_colour), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void get_foreground_colour(int &out r, int &out g, int &out b)", asFUNCTION(wx_window_get_foreground_colour), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_foreground_colour(int r, int g, int b)", asFUNCTION(wx_window_set_foreground_colour), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "wx_sizer@ get_sizer()", asFUNCTION(wx_window_get_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_sizer(wx_sizer@)", asMETHOD(wxWindow, SetSizer), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "void get_size(int &out, int &out)", asFUNCTION(wx_window_get_size), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_size(int, int)", asFUNCTION(wx_window_set_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void get_size(int &out width, int &out height)", asFUNCTION(wx_window_get_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_size(int width, int height)", asFUNCTION(wx_window_set_size), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool is_shown()", asMETHOD(wxWindow, IsShown), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "bool is_enabled()", asMETHOD(wxWindow, IsEnabled), asCALL_THISCALL);
 
 #define REG_TLW_METHODS(name) \
     engine->RegisterObjectMethod(name, "string get_title()", asFUNCTION(wx_tlw_get_title), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_title(const string &in)", asFUNCTION(wx_tlw_set_title), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_title(const string &in title)", asFUNCTION(wx_tlw_set_title), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool full_screen(bool show)", asMETHOD(wxTopLevelWindow, ShowFullScreen), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void maximize(bool maximize = true)", asMETHOD(wxTopLevelWindow, Maximize), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void iconize(bool iconize = true)", asMETHOD(wxTopLevelWindow, Iconize), asCALL_THISCALL); \
@@ -410,7 +410,7 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
 
 #define REG_CONTROL_METHODS(name) \
     engine->RegisterObjectMethod(name, "string get_label()", asFUNCTION(wx_control_get_label), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_label(const string &in)", asFUNCTION(wx_control_set_label), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_label(const string &in label)", asFUNCTION(wx_control_set_label), asCALL_CDECL_OBJFIRST); \
 
 #define REG_SIZER_METHODS(name) \
     engine->RegisterObjectMethod(name, "void add(wx_window@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_add_window), asCALL_CDECL_OBJFIRST); \
@@ -419,14 +419,14 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
 
 #define REG_TEXT_ENTRY_METHODS(name) \
     engine->RegisterObjectMethod(name, "string get_value()", asFUNCTION(wx_text_entry_get_value), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_value(const string &in)", asFUNCTION(wx_text_entry_set_value), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void write_text(const string &in)", asFUNCTION(wx_text_entry_write_text), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void append_text(const string &in)", asFUNCTION(wx_text_entry_append_text), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_value(const string &in value)", asFUNCTION(wx_text_entry_set_value), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void write_text(const string &in text)", asFUNCTION(wx_text_entry_write_text), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void append_text(const string &in text)", asFUNCTION(wx_text_entry_append_text), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void clear()", asFUNCTION(wx_text_entry_clear), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void copy()", asFUNCTION(wx_text_entry_copy), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void cut()", asFUNCTION(wx_text_entry_cut), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void paste()", asFUNCTION(wx_text_entry_paste), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void remove(int, int)", asFUNCTION(wx_text_entry_remove), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void remove(int from, int to)", asFUNCTION(wx_text_entry_remove), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void undo()", asFUNCTION(wx_text_entry_undo), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void redo()", asFUNCTION(wx_text_entry_redo), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool can_copy()", asFUNCTION(wx_text_entry_can_copy), asCALL_CDECL_OBJFIRST); \
@@ -434,17 +434,17 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
     engine->RegisterObjectMethod(name, "bool can_paste()", asFUNCTION(wx_text_entry_can_paste), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool can_undo()", asFUNCTION(wx_text_entry_can_undo), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool can_redo()", asFUNCTION(wx_text_entry_can_redo), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "string get_range(int, int)", asFUNCTION(wx_text_entry_get_range), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "string get_range(int from, int to)", asFUNCTION(wx_text_entry_get_range), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "string get_string_selection()", asFUNCTION(wx_text_entry_get_string_selection), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void get_selection(int &out, int &out)", asFUNCTION(wx_text_entry_get_selection), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_selection(int, int)", asFUNCTION(wx_text_entry_set_selection), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void get_selection(int &out from, int &out to)", asFUNCTION(wx_text_entry_get_selection), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_selection(int from, int to)", asFUNCTION(wx_text_entry_set_selection), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool is_editable()", asFUNCTION(wx_text_entry_is_editable), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_editable(bool)", asFUNCTION(wx_text_entry_set_editable), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_editable(bool editable)", asFUNCTION(wx_text_entry_set_editable), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool is_empty()", asFUNCTION(wx_text_entry_is_empty), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void replace(int, int, const string &in)", asFUNCTION(wx_text_entry_replace), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void replace(int from, int to, const string &in text)", asFUNCTION(wx_text_entry_replace), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void select_all()", asFUNCTION(wx_text_entry_select_all), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void select_none()", asFUNCTION(wx_text_entry_select_none), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_max_length(int)", asFUNCTION(wx_text_entry_set_max_length), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod(name, "void set_max_length(int length)", asFUNCTION(wx_text_entry_set_max_length), asCALL_CDECL_OBJFIRST);
 
 #define REGISTER_WX_WINDOW(as_name, wx_type) \
     engine->RegisterObjectType(as_name, 0, asOBJ_REF); \
@@ -596,36 +596,33 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterObjectType("wx_sizer", 0, asOBJ_REF);
 
     REGISTER_WX_WINDOW("wx_window", wxWindow);
-
     REGISTER_WX_TLW("wx_top_level_window", wxTopLevelWindow);
     REGISTER_WX_CONTROL("wx_control", wxControl);
     REG_BASE_REF("wx_text_entry");
     REG_TEXT_ENTRY_METHODS("wx_text_entry");
-    REGISTER_WX_TEXT_CONTROL("wx_text_control", wxTextCtrl);
     REGISTER_WX_SIZER("wx_sizer", wxSizer);
 
     REGISTER_WX_SIZER("wx_box_sizer", wxBoxSizer);
-
     REGISTER_WX_TLW("wx_frame", wxFrame);
     REGISTER_WX_WINDOW("wx_panel", wxPanel);
-
     REGISTER_WX_CONTROL("wx_button", wxButton);
     REGISTER_WX_CONTROL("wx_static_text", wxStaticText);
     engine->RegisterObjectMethod("wx_static_text", "void wrap(int width)", asMETHOD(wxStaticText, Wrap), asCALL_THISCALL);
+    REGISTER_WX_TEXT_CONTROL("wx_text_control", wxTextCtrl);
 
     engine->RegisterObjectType("wx", sizeof(WxManager), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_C);
     engine->RegisterObjectBehaviour("wx", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(WxConstructor), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectBehaviour("wx", asBEHAVE_DESTRUCT, "void f()", asFUNCTION(WxDestructor), asCALL_CDECL_OBJLAST);
     
     engine->RegisterObjectMethod("wx", "void update()", asMETHOD(WxManager, update), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx", "wx_frame@ create_frame(const string &in, int, int, int style = WX_DEFAULT_FRAME_STYLE)", 
+    engine->RegisterObjectMethod("wx", "wx_frame@ create_frame(const string &in title, int width, int height, int style = WX_DEFAULT_FRAME_STYLE)", 
     asMETHOD(WxManager, create_frame), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx", "wx_button@ create_button(wx_window@, const string &in, int style = 0)", 
+    engine->RegisterObjectMethod("wx", "wx_button@ create_button(wx_window@, const string &in label, int style = 0)", 
     asMETHOD(WxManager, create_button), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx", "wx_box_sizer@ create_box_sizer(int)", asMETHOD(WxManager, create_box_sizer), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_box_sizer@ create_box_sizer(int orientation)", asMETHOD(WxManager, create_box_sizer), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_panel@ create_panel(wx_window@, int style = WX_TAB_TRAVERSAL)", 
     asMETHOD(WxManager, create_panel), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx", "wx_static_text@ create_static_text(wx_window@, const string &in, int style = 0)", asMETHOD(WxManager, create_static_text), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx", "wx_text_control@ create_text_control(wx_window@, const string &in = \"\", int style = 0)", asMETHOD(WxManager, create_text_control), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_static_text@ create_static_text(wx_window@, const string &in label, int style = 0)", asMETHOD(WxManager, create_static_text), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_text_control@ create_text_control(wx_window@, const string &in text = \"\", int style = 0)", asMETHOD(WxManager, create_text_control), asCALL_THISCALL);
     return true;
 }
