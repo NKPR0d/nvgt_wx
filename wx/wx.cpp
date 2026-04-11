@@ -108,16 +108,38 @@ T* Track(T* obj) {
     return obj;
 }
 
+template<typename T>
+T* window_to_derived(wxWindow* win) {
+    if (!win) return nullptr;
+    T* derived = dynamic_cast<T*>(win);
+    if (derived) AddRef(derived);
+    return derived;
+}
+
+wxWindow* wx_event_get_event_object(wxEvent* self) {
+    wxWindow* win = dynamic_cast<wxWindow*>(self->GetEventObject());
+    if (win) AddRef(win);
+    return win;
+}
+
+int wx_event_get_event_type(wxEvent* self) {
+    return self->GetEventType();
+}
+
+void wx_event_skip(wxEvent* self, bool skip) {
+    self->Skip(skip);
+}
+
 void OnWxEvent(wxEvent& event) {
     auto it = g_event_handlers.find({event.GetEventObject(), event.GetEventType()});
     if (it != g_event_handlers.end()) {
         ContextGuard guard(it->second.engine);
         if (auto ctx = guard.get()) {
             ctx->Prepare(it->second.callback);
+            ctx->SetArgObject(0, &event);            
             ctx->Execute();
         }
     }
-    event.Skip();
 }
 
 void wx_window_bind(wxWindow* self, int event_type, asIScriptFunction* callback) {
@@ -476,6 +498,7 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
         engine->RegisterObjectMethod(as_name, "wx_top_level_window@ opImplCast()", asFUNCTION(to_tlw<wx_type>), asCALL_CDECL_OBJFIRST); \
     } \
     engine->RegisterObjectMethod(as_name, "wx_window@ opImplCast()", asFUNCTION(to_window<wx_type>), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod("wx_window", as_name "@ opCast()", asFUNCTION(window_to_derived<wx_type>), asCALL_CDECL_OBJLAST); \
     REG_WINDOW_METHODS(as_name); \
     REG_TLW_METHODS(as_name);
 
@@ -486,6 +509,7 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
         engine->RegisterObjectMethod(as_name, "wx_control@ opImplCast()", asFUNCTION(to_control<wx_type>), asCALL_CDECL_OBJFIRST); \
     } \
     engine->RegisterObjectMethod(as_name, "wx_window@ opImplCast()", asFUNCTION(to_window<wx_type>), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod("wx_window", as_name "@ opCast()", asFUNCTION(window_to_derived<wx_type>), asCALL_CDECL_OBJLAST); \
     REG_WINDOW_METHODS(as_name); \
     REG_CONTROL_METHODS(as_name);
 
@@ -602,13 +626,14 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterEnumValue("wx_user_attention", "WX_USER_ATTENTION_INFO", wxUSER_ATTENTION_INFO);
     engine->RegisterEnumValue("wx_user_attention", "WX_USER_ATTENTION_ERROR", wxUSER_ATTENTION_ERROR);
 
-    engine->RegisterFuncdef("void wx_callback()");
-
     engine->RegisterObjectType("wx_window", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_top_level_window", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_control", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_text_entry", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_sizer", 0, asOBJ_REF);
+    engine->RegisterObjectType("wx_event", 0, asOBJ_REF | asOBJ_NOCOUNT);
+
+    engine->RegisterFuncdef("void wx_callback(wx_event@)");
 
     REGISTER_WX_WINDOW("wx_window", wxWindow);
     REGISTER_WX_TLW("wx_top_level_window", wxTopLevelWindow);
@@ -624,6 +649,10 @@ plugin_main(nvgt_plugin_shared* shared) {
     REGISTER_WX_CONTROL("wx_static_text", wxStaticText);
     engine->RegisterObjectMethod("wx_static_text", "void wrap(int width)", asMETHOD(wxStaticText, Wrap), asCALL_THISCALL);
     REGISTER_WX_TEXT_CONTROL("wx_text_control", wxTextCtrl);
+
+    engine->RegisterObjectMethod("wx_event", "wx_window@ get_event_object()", asFUNCTION(wx_event_get_event_object), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_event", "int get_event_type()", asFUNCTION(wx_event_get_event_type), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_event", "void skip(bool skip = true)", asFUNCTION(wx_event_skip), asCALL_CDECL_OBJFIRST);
 
     engine->RegisterObjectType("wx", sizeof(WxManager), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_C);
     engine->RegisterObjectBehaviour("wx", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(WxConstructor), asCALL_CDECL_OBJLAST);
