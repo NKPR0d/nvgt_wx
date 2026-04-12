@@ -562,6 +562,19 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterEnumValue("wx_sizer_flag", "WX_RESERVE_SPACE_EVEN_IF_HIDDEN", wxRESERVE_SPACE_EVEN_IF_HIDDEN);
 
     engine->RegisterEnum("wx_event_type");
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_ACTIVATE", wxEVT_ACTIVATE);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_CHILD_FOCUS", wxEVT_CHILD_FOCUS);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_CONTEXT_MENU", wxEVT_CONTEXT_MENU);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_ERASE_BACKGROUND", wxEVT_ERASE_BACKGROUND);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_SET_FOCUS", wxEVT_SET_FOCUS);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_KILL_FOCUS", wxEVT_KILL_FOCUS);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_KEY_DOWN", wxEVT_KEY_DOWN);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_KEY_UP", wxEVT_KEY_UP);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_CHAR", wxEVT_CHAR);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_CHAR_HOOK", wxEVT_CHAR_HOOK);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_PAINT", wxEVT_PAINT);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_SIZE", wxEVT_SIZE);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_SYS_COLOUR_CHANGED", wxEVT_SYS_COLOUR_CHANGED);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_CLOSE_WINDOW", wxEVT_CLOSE_WINDOW);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_ICONIZE", wxEVT_ICONIZE);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_MENU_OPEN", wxEVT_MENU_OPEN);
