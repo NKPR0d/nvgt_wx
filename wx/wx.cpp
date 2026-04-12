@@ -116,6 +116,11 @@ T* window_to_derived(wxWindow* win) {
     return derived;
 }
 
+template<typename T>
+T* event_to_derived(wxEvent* e) {
+    return dynamic_cast<T*>(e);
+}
+
 wxWindow* wx_event_get_event_object(wxEvent* self) {
     wxWindow* win = dynamic_cast<wxWindow*>(self->GetEventObject());
     if (win) AddRef(win);
@@ -129,6 +134,12 @@ int wx_event_get_event_type(wxEvent* self) {
 void wx_event_skip(wxEvent* self, bool skip) {
     self->Skip(skip);
 }
+
+int wx_key_event_get_key_code(wxKeyEvent* self) { return self->GetKeyCode(); }
+int wx_key_event_get_unicode_key(wxKeyEvent* self) { return self->GetUnicodeKey(); }
+bool wx_key_event_control_down(wxKeyEvent* self) { return self->ControlDown(); }
+bool wx_key_event_shift_down(wxKeyEvent* self) { return self->ShiftDown(); }
+bool wx_key_event_alt_down(wxKeyEvent* self) { return self->AltDown(); }
 
 void OnWxEvent(wxEvent& event) {
     auto it = g_event_handlers.find({event.GetEventObject(), event.GetEventType()});
@@ -531,6 +542,44 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
     } \
     REG_SIZER_METHODS(as_name);
 
+void register_key_codes(asIScriptEngine* engine) {
+    engine->RegisterEnum("wx_key_code");
+    #define REG_KEY(name) engine->RegisterEnumValue("wx_key_code", #name, name)
+    REG_KEY(WXK_NONE);
+for (char c = 'A'; c <= 'Z'; ++c) {
+    std::string name = "WXK_";
+    name += c;
+    engine->RegisterEnumValue("wx_key_code", name.c_str(), c);
+}
+for (int i = 0; i <= 9; ++i) {
+    std::string name = "WXK_" + std::to_string(i);
+    engine->RegisterEnumValue("wx_key_code", name.c_str(), '0' + i);
+}
+    REG_KEY(WXK_BACK); REG_KEY(WXK_TAB); REG_KEY(WXK_RETURN);
+    REG_KEY(WXK_ESCAPE); REG_KEY(WXK_SPACE); REG_KEY(WXK_DELETE);
+    REG_KEY(WXK_START); REG_KEY(WXK_LBUTTON); REG_KEY(WXK_RBUTTON);
+    REG_KEY(WXK_CANCEL); REG_KEY(WXK_MBUTTON); REG_KEY(WXK_CLEAR);
+    REG_KEY(WXK_SHIFT); REG_KEY(WXK_ALT); REG_KEY(WXK_CONTROL);
+    REG_KEY(WXK_RAW_CONTROL); REG_KEY(WXK_MENU); REG_KEY(WXK_PAUSE);
+    REG_KEY(WXK_CAPITAL); REG_KEY(WXK_END); REG_KEY(WXK_HOME);
+    REG_KEY(WXK_LEFT); REG_KEY(WXK_UP); REG_KEY(WXK_RIGHT); REG_KEY(WXK_DOWN);
+    REG_KEY(WXK_SELECT); REG_KEY(WXK_PRINT); REG_KEY(WXK_EXECUTE);
+    REG_KEY(WXK_SNAPSHOT); REG_KEY(WXK_INSERT); REG_KEY(WXK_HELP);
+    REG_KEY(WXK_NUMPAD0); REG_KEY(WXK_NUMPAD1); REG_KEY(WXK_NUMPAD2);
+    REG_KEY(WXK_NUMPAD3); REG_KEY(WXK_NUMPAD4); REG_KEY(WXK_NUMPAD5);
+    REG_KEY(WXK_NUMPAD6); REG_KEY(WXK_NUMPAD7); REG_KEY(WXK_NUMPAD8);
+    REG_KEY(WXK_NUMPAD9);
+    REG_KEY(WXK_MULTIPLY); REG_KEY(WXK_ADD); REG_KEY(WXK_SEPARATOR);
+    REG_KEY(WXK_SUBTRACT); REG_KEY(WXK_DECIMAL); REG_KEY(WXK_DIVIDE);
+    REG_KEY(WXK_F1); REG_KEY(WXK_F2); REG_KEY(WXK_F3); REG_KEY(WXK_F4);
+    REG_KEY(WXK_F5); REG_KEY(WXK_F6); REG_KEY(WXK_F7); REG_KEY(WXK_F8);
+    REG_KEY(WXK_F9); REG_KEY(WXK_F10); REG_KEY(WXK_F11); REG_KEY(WXK_F12);
+    REG_KEY(WXK_NUMLOCK); REG_KEY(WXK_SCROLL);
+    REG_KEY(WXK_PAGEUP); REG_KEY(WXK_PAGEDOWN);
+    REG_KEY(WXK_WINDOWS_LEFT); REG_KEY(WXK_WINDOWS_RIGHT);
+    #undef REG_KEY
+}
+
 plugin_main(nvgt_plugin_shared* shared) {
     if (!prepare_plugin(shared)) return false;
     asIScriptEngine* engine = shared->script_engine;
@@ -644,12 +693,15 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterEnumValue("wx_user_attention", "WX_USER_ATTENTION_INFO", wxUSER_ATTENTION_INFO);
     engine->RegisterEnumValue("wx_user_attention", "WX_USER_ATTENTION_ERROR", wxUSER_ATTENTION_ERROR);
 
+    register_key_codes(engine);
+
     engine->RegisterObjectType("wx_window", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_top_level_window", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_control", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_text_entry", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_sizer", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_event", 0, asOBJ_REF | asOBJ_NOCOUNT);
+    engine->RegisterObjectType("wx_key_event", 0, asOBJ_REF | asOBJ_NOCOUNT);
 
     engine->RegisterFuncdef("void wx_callback(wx_event@)");
 
@@ -668,9 +720,16 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterObjectMethod("wx_static_text", "void wrap(int width)", asMETHOD(wxStaticText, Wrap), asCALL_THISCALL);
     REGISTER_WX_TEXT_CONTROL("wx_text_control", wxTextCtrl);
 
+    engine->RegisterObjectMethod("wx_event", "wx_key_event@ opCast()", asFUNCTION(event_to_derived<wxKeyEvent>), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectMethod("wx_event", "wx_window@ get_event_object()", asFUNCTION(wx_event_get_event_object), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_event", "int get_event_type()", asFUNCTION(wx_event_get_event_type), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_event", "void skip(bool skip = true)", asFUNCTION(wx_event_skip), asCALL_CDECL_OBJFIRST);
+
+    engine->RegisterObjectMethod("wx_key_event", "int get_key_code()", asFUNCTION(wx_key_event_get_key_code), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_key_event", "int get_unicode_key()", asFUNCTION(wx_key_event_get_unicode_key), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_key_event", "bool control_down()", asFUNCTION(wx_key_event_control_down), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_key_event", "bool shift_down()", asFUNCTION(wx_key_event_shift_down), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_key_event", "bool alt_down()", asFUNCTION(wx_key_event_alt_down), asCALL_CDECL_OBJFIRST);
 
     engine->RegisterObjectType("wx", sizeof(WxManager), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_C);
     engine->RegisterObjectBehaviour("wx", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(WxConstructor), asCALL_CDECL_OBJLAST);
