@@ -139,6 +139,14 @@ bool wx_key_event_alt_down(wxKeyEvent* self) {
     return self->AltDown();
 }
 
+int wx_mouse_event_get_x(wxMouseEvent* self) { return self->GetX(); }
+int wx_mouse_event_get_y(wxMouseEvent* self) { return self->GetY(); }
+bool wx_mouse_event_left_is_down(wxMouseEvent* self) { return self->LeftIsDown(); }
+bool wx_mouse_event_middle_is_down(wxMouseEvent* self) { return self->MiddleIsDown(); }
+bool wx_mouse_event_right_is_down(wxMouseEvent* self) { return self->RightIsDown(); }
+bool wx_mouse_event_aux1_is_down(wxMouseEvent* self) { return self->Aux1IsDown(); }
+bool wx_mouse_event_aux2_is_down(wxMouseEvent* self) { return self->Aux2IsDown(); }
+
 void OnWxEvent(wxEvent& event) {
     auto it = g_event_handlers.find({event.GetEventObject(), event.GetEventType()});
     if (it != g_event_handlers.end()) {
@@ -619,6 +627,28 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_KEY_UP", wxEVT_KEY_UP);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_CHAR", wxEVT_CHAR);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_CHAR_HOOK", wxEVT_CHAR_HOOK);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_LEFT_DOWN", wxEVT_LEFT_DOWN);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_LEFT_UP", wxEVT_LEFT_UP);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_RIGHT_DOWN", wxEVT_RIGHT_DOWN);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_RIGHT_UP", wxEVT_RIGHT_UP);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_MIDDLE_DOWN", wxEVT_MIDDLE_DOWN);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_MIDDLE_UP", wxEVT_MIDDLE_UP);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_AUX1_DOWN", wxEVT_AUX1_DOWN);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_AUX1_UP", wxEVT_AUX1_UP);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_AUX2_DOWN", wxEVT_AUX2_DOWN);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_AUX2_UP", wxEVT_AUX2_UP);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_MOTION", wxEVT_MOTION);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_MOUSEWHEEL", wxEVT_MOUSEWHEEL);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_LEFT_DCLICK", wxEVT_LEFT_DCLICK);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_MIDDLE_DCLICK", wxEVT_MIDDLE_DCLICK);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_RIGHT_DCLICK", wxEVT_RIGHT_DCLICK);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_AUX1_DCLICK", wxEVT_AUX1_DCLICK);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_AUX2_DCLICK", wxEVT_AUX2_DCLICK);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_ENTER_WINDOW", wxEVT_ENTER_WINDOW);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_LEAVE_WINDOW", wxEVT_LEAVE_WINDOW);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_MAGNIFY", wxEVT_MAGNIFY);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_MOUSE_CAPTURE_LOST", wxEVT_MOUSE_CAPTURE_LOST);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_MOUSE_CAPTURE_CHANGED", wxEVT_MOUSE_CAPTURE_CHANGED);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_PAINT", wxEVT_PAINT);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_SIZE", wxEVT_SIZE);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_SYS_COLOUR_CHANGED", wxEVT_SYS_COLOUR_CHANGED);
@@ -700,6 +730,7 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterObjectType("wx_sizer", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_event", 0, asOBJ_REF | asOBJ_NOCOUNT);
     engine->RegisterObjectType("wx_key_event", 0, asOBJ_REF | asOBJ_NOCOUNT);
+    engine->RegisterObjectType("wx_mouse_event", 0, asOBJ_REF | asOBJ_NOCOUNT);
 
     engine->RegisterFuncdef("void wx_callback(wx_event@)");
 
@@ -719,6 +750,7 @@ plugin_main(nvgt_plugin_shared* shared) {
     REGISTER_WX_TEXT_CONTROL("wx_text_control", wxTextCtrl);
 
     engine->RegisterObjectMethod("wx_event", "wx_key_event@ opCast()", asFUNCTION(event_to_derived<wxKeyEvent>), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectMethod("wx_event", "wx_mouse_event@ opCast()", asFUNCTION(event_to_derived<wxMouseEvent>), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectMethod("wx_event", "wx_window@ get_event_object()", asFUNCTION(wx_event_get_event_object), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_event", "int get_event_type()", asMETHOD(wxEvent, GetEventType), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_event", "void skip(bool skip = true)", asMETHOD(wxEvent, Skip), asCALL_THISCALL);
@@ -728,6 +760,39 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterObjectMethod("wx_key_event", "bool control_down()", asFUNCTION(wx_key_event_control_down), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_key_event", "bool shift_down()", asFUNCTION(wx_key_event_shift_down), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_key_event", "bool alt_down()", asFUNCTION(wx_key_event_alt_down), asCALL_CDECL_OBJFIRST);
+
+    engine->RegisterObjectMethod("wx_mouse_event", "bool button()", asMETHOD(wxMouseEvent, Button), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool button_down()", asMETHOD(wxMouseEvent, ButtonDown), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool button_up()", asMETHOD(wxMouseEvent, ButtonUp), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool button_dclick()", asMETHOD(wxMouseEvent, ButtonDClick), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool left_down()", asMETHOD(wxMouseEvent, LeftDown), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool left_up()", asMETHOD(wxMouseEvent, LeftUp), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool left_dclick()", asMETHOD(wxMouseEvent, LeftDClick), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool middle_down()", asMETHOD(wxMouseEvent, MiddleDown), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool middle_up()", asMETHOD(wxMouseEvent, MiddleUp), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool middle_dclick()", asMETHOD(wxMouseEvent, MiddleDClick), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool right_down()", asMETHOD(wxMouseEvent, RightDown), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool right_up()", asMETHOD(wxMouseEvent, RightUp), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool right_dclick()", asMETHOD(wxMouseEvent, RightDClick), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool aux1_down()", asMETHOD(wxMouseEvent, Aux1Down), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool aux1_up()", asMETHOD(wxMouseEvent, Aux1Up), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool aux1_dclick()", asMETHOD(wxMouseEvent, Aux1DClick), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool aux2_down()", asMETHOD(wxMouseEvent, Aux2Down), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool aux2_up()", asMETHOD(wxMouseEvent, Aux2Up), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool aux2_dclick()", asMETHOD(wxMouseEvent, Aux2DClick), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool left_is_down()", asFUNCTION(wx_mouse_event_left_is_down), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool middle_is_down()", asFUNCTION(wx_mouse_event_middle_is_down), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool right_is_down()", asFUNCTION(wx_mouse_event_right_is_down), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool aux1_is_down()", asFUNCTION(wx_mouse_event_aux1_is_down), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool aux2_is_down()", asFUNCTION(wx_mouse_event_aux2_is_down), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "int get_x()", asFUNCTION(wx_mouse_event_get_x), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "int get_y()", asFUNCTION(wx_mouse_event_get_y), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "int get_wheel_rotation()", asMETHOD(wxMouseEvent, GetWheelRotation), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "int get_wheel_delta()", asMETHOD(wxMouseEvent, GetWheelDelta), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool dragging()", asMETHOD(wxMouseEvent, Dragging), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool moving()", asMETHOD(wxMouseEvent, Moving), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool entering()", asMETHOD(wxMouseEvent, Entering), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool leaving()", asMETHOD(wxMouseEvent, Leaving), asCALL_THISCALL);
 
     engine->RegisterObjectType("wx", sizeof(WxManager), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_C);
     engine->RegisterObjectBehaviour("wx", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(WxConstructor), asCALL_CDECL_OBJLAST);
