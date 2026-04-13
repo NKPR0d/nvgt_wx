@@ -127,19 +127,17 @@ wxWindow* wx_event_get_event_object(wxEvent* self) {
     return win;
 }
 
-int wx_event_get_event_type(wxEvent* self) {
-    return self->GetEventType();
+bool wx_key_event_control_down(wxKeyEvent* self) {
+    return self->ControlDown();
 }
 
-void wx_event_skip(wxEvent* self, bool skip) {
-    self->Skip(skip);
+bool wx_key_event_shift_down(wxKeyEvent* self) {
+    return self->ShiftDown();
 }
 
-int wx_key_event_get_key_code(wxKeyEvent* self) { return self->GetKeyCode(); }
-int wx_key_event_get_unicode_key(wxKeyEvent* self) { return self->GetUnicodeKey(); }
-bool wx_key_event_control_down(wxKeyEvent* self) { return self->ControlDown(); }
-bool wx_key_event_shift_down(wxKeyEvent* self) { return self->ShiftDown(); }
-bool wx_key_event_alt_down(wxKeyEvent* self) { return self->AltDown(); }
+bool wx_key_event_alt_down(wxKeyEvent* self) {
+    return self->AltDown();
+}
 
 void OnWxEvent(wxEvent& event) {
     auto it = g_event_handlers.find({event.GetEventObject(), event.GetEventType()});
@@ -722,11 +720,11 @@ plugin_main(nvgt_plugin_shared* shared) {
 
     engine->RegisterObjectMethod("wx_event", "wx_key_event@ opCast()", asFUNCTION(event_to_derived<wxKeyEvent>), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectMethod("wx_event", "wx_window@ get_event_object()", asFUNCTION(wx_event_get_event_object), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_event", "int get_event_type()", asFUNCTION(wx_event_get_event_type), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_event", "void skip(bool skip = true)", asFUNCTION(wx_event_skip), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_event", "int get_event_type()", asMETHOD(wxEvent, GetEventType), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_event", "void skip(bool skip = true)", asMETHOD(wxEvent, Skip), asCALL_THISCALL);
 
-    engine->RegisterObjectMethod("wx_key_event", "int get_key_code()", asFUNCTION(wx_key_event_get_key_code), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_key_event", "int get_unicode_key()", asFUNCTION(wx_key_event_get_unicode_key), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_key_event", "int get_key_code()", asMETHOD(wxKeyEvent, GetKeyCode), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_key_event", "int get_unicode_key()", asMETHOD(wxKeyEvent, GetUnicodeKey), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_key_event", "bool control_down()", asFUNCTION(wx_key_event_control_down), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_key_event", "bool shift_down()", asFUNCTION(wx_key_event_shift_down), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_key_event", "bool alt_down()", asFUNCTION(wx_key_event_alt_down), asCALL_CDECL_OBJFIRST);
