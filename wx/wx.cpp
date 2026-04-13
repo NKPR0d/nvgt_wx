@@ -530,16 +530,6 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
     REG_WINDOW_METHODS(as_name); \
     REG_CONTROL_METHODS(as_name);
 
-#define REGISTER_WX_TEXT_CONTROL(as_name, wx_type) \
-    engine->RegisterObjectType(as_name, 0, asOBJ_REF); \
-    REG_BASE_REF(as_name); \
-    engine->RegisterObjectMethod(as_name, "wx_control@ opImplCast()", asFUNCTION(to_control<wx_type>), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(as_name, "wx_window@ opImplCast()", asFUNCTION(to_window<wx_type>), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(as_name, "wx_text_entry@ opImplCast()", asFUNCTION(to_text_entry_as_win<wx_type>), asCALL_CDECL_OBJFIRST); \
-    REG_WINDOW_METHODS(as_name); \
-    REG_CONTROL_METHODS(as_name); \
-    REG_TEXT_ENTRY_METHODS(as_name);
-
 #define REGISTER_WX_SIZER(as_name, wx_type) \
     engine->RegisterObjectType(as_name, 0, asOBJ_REF); \
     REG_BASE_REF(as_name); \
@@ -740,14 +730,15 @@ plugin_main(nvgt_plugin_shared* shared) {
     REG_BASE_REF("wx_text_entry");
     REG_TEXT_ENTRY_METHODS("wx_text_entry");
     REGISTER_WX_SIZER("wx_sizer", wxSizer);
-
     REGISTER_WX_SIZER("wx_box_sizer", wxBoxSizer);
     REGISTER_WX_TLW("wx_frame", wxFrame);
     REGISTER_WX_WINDOW("wx_panel", wxPanel);
     REGISTER_WX_CONTROL("wx_button", wxButton);
     REGISTER_WX_CONTROL("wx_static_text", wxStaticText);
     engine->RegisterObjectMethod("wx_static_text", "void wrap(int width)", asMETHOD(wxStaticText, Wrap), asCALL_THISCALL);
-    REGISTER_WX_TEXT_CONTROL("wx_text_control", wxTextCtrl);
+    REGISTER_WX_CONTROL("wx_text_control", wxTextCtrl);
+    engine->RegisterObjectMethod("wx_text_control", "wx_text_entry@ opImplCast()", asFUNCTION(to_text_entry_as_win<wxTextCtrl>), asCALL_CDECL_OBJFIRST); \
+    REG_TEXT_ENTRY_METHODS("wx_text_control");
 
     engine->RegisterObjectMethod("wx_event", "wx_key_event@ opCast()", asFUNCTION(event_to_derived<wxKeyEvent>), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectMethod("wx_event", "wx_mouse_event@ opCast()", asFUNCTION(event_to_derived<wxMouseEvent>), asCALL_CDECL_OBJLAST);
