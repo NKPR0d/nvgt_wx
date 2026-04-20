@@ -221,7 +221,14 @@ void wx_window_set_size(wxWindow* self, int w, int h) {
 }
 
 std::string wx_control_get_label(wxControl* self) { return self ? std::string(self->GetLabel().utf8_str()) : ""; }
-void wx_control_set_label(wxControl* self, const std::string& label) { if (self) self->SetLabel(wxString::FromUTF8(label.c_str())); }
+
+void wx_control_set_label(wxControl* self, const std::string& label) {
+    if (self) {
+        wxString wx_s = wxString::FromUTF8(label.c_str());        
+        self->SetLabel(wx_s);        
+        self->SetName(wx_s);
+    }
+}
 
 std::string wx_tlw_get_title(wxTopLevelWindow* self) {
     return self ? std::string(self->GetTitle().utf8_str()) : "";
@@ -392,7 +399,8 @@ public:
     }
 
     wxButton* create_button(wxWindow* parent, const std::string& label, long style = 0) {
-        return Track(new wxButton(parent, wxID_ANY, wxString::FromUTF8(label.c_str()), wxDefaultPosition, wxDefaultSize, style));
+        wxString wx_s = wxString::FromUTF8(label.c_str());
+        return Track(new wxButton(parent, wxID_ANY, wx_s, wxDefaultPosition, wxDefaultSize, style, wxDefaultValidator, wx_s));
     }
 
     wxBoxSizer* create_box_sizer(int orient) {
@@ -406,11 +414,17 @@ public:
     }
 
     wxStaticText* create_static_text(wxWindow* parent, const std::string& label, long style = 0) {
-        return Track(new wxStaticText(parent, wxID_ANY, wxString::FromUTF8(label.c_str()), wxDefaultPosition, wxDefaultSize, style));
+        wxString wx_s = wxString::FromUTF8(label.c_str());
+        return Track(new wxStaticText(parent, wxID_ANY, wx_s, wxDefaultPosition, wxDefaultSize, style, wx_s));
     }
 
     wxTextCtrl* create_text_control(wxWindow* parent, const std::string& value = "", long style = 0) {
         return Track(new wxTextCtrl(parent, wxID_ANY, wxString::FromUTF8(value.c_str()), wxDefaultPosition, wxDefaultSize, style));
+    }
+
+    wxCheckBox* create_check_box(wxWindow* parent, const std::string& label, long style = 0) {
+        wxString wx_s = wxString::FromUTF8(label.c_str());
+        return Track (new wxCheckBox(parent, wxID_ANY, wx_s, wxDefaultPosition, wxDefaultSize, style, wxDefaultValidator, wx_s));
     }
 };
 
@@ -648,6 +662,7 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_MENU_CLOSE", wxEVT_MENU_CLOSE);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_MENU_HIGHLIGHT", wxEVT_MENU_HIGHLIGHT);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_BUTTON", wxEVT_BUTTON);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_CHECKBOX", wxEVT_CHECKBOX);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_TEXT", wxEVT_TEXT);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_TEXT_ENTER", wxEVT_TEXT_ENTER);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_TEXT_URL", wxEVT_TEXT_URL);
@@ -689,6 +704,10 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterEnumValue("wx_style", "WX_BU_BOTTOM", wxBU_BOTTOM);
     engine->RegisterEnumValue("wx_style", "WX_BU_EXACTFIT", wxBU_EXACTFIT);
     engine->RegisterEnumValue("wx_style", "WX_BU_NOTEXT", wxBU_NOTEXT);
+//wx_check_box
+    engine->RegisterEnumValue("wx_style", "WX_CHK_2STATE", wxCHK_2STATE);
+    engine->RegisterEnumValue("wx_style", "WX_CHK_3STATE", wxCHK_3STATE);
+    engine->RegisterEnumValue("wx_style", "WX_CHK_ALLOW_3RD_STATE_FOR_USER", wxCHK_ALLOW_3RD_STATE_FOR_USER);
 //wx_text_control
     engine->RegisterEnumValue("wx_style", "WX_TE_MULTILINE", wxTE_MULTILINE);
     engine->RegisterEnumValue("wx_style", "WX_TE_PASSWORD", wxTE_PASSWORD);
@@ -734,6 +753,11 @@ plugin_main(nvgt_plugin_shared* shared) {
     REGISTER_WX_TLW("wx_frame", wxFrame);
     REGISTER_WX_WINDOW("wx_panel", wxPanel);
     REGISTER_WX_CONTROL("wx_button", wxButton);
+    REGISTER_WX_CONTROL("wx_check_box", wxCheckBox);
+    engine->RegisterObjectMethod("wx_check_box", "bool get_value()", asMETHOD(wxCheckBox, GetValue), asCALL_THISCALL);    
+    engine->RegisterObjectMethod("wx_check_box", "void set_value(bool)", asMETHOD(wxCheckBox, SetValue), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_check_box", "bool is_3state()", asMETHOD(wxCheckBox, Is3State), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_check_box", "bool is_checked()", asMETHOD(wxCheckBox, IsChecked), asCALL_THISCALL);
     REGISTER_WX_CONTROL("wx_static_text", wxStaticText);
     engine->RegisterObjectMethod("wx_static_text", "void wrap(int width)", asMETHOD(wxStaticText, Wrap), asCALL_THISCALL);
     REGISTER_WX_CONTROL("wx_text_control", wxTextCtrl);
@@ -790,13 +814,11 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterObjectBehaviour("wx", asBEHAVE_DESTRUCT, "void f()", asFUNCTION(WxDestructor), asCALL_CDECL_OBJLAST);
     
     engine->RegisterObjectMethod("wx", "void update()", asMETHOD(WxManager, update), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx", "wx_frame@ create_frame(const string &in title, int width, int height, int style = WX_DEFAULT_FRAME_STYLE)", 
-    asMETHOD(WxManager, create_frame), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx", "wx_button@ create_button(wx_window@, const string &in label, int style = 0)", 
-    asMETHOD(WxManager, create_button), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_frame@ create_frame(const string &in title, int width, int height, int style = WX_DEFAULT_FRAME_STYLE)", asMETHOD(WxManager, create_frame), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_button@ create_button(wx_window@, const string &in label, int style = 0)", asMETHOD(WxManager, create_button), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_check_box@ create_check_box(wx_window@, const string &in, int style = 0)", asMETHOD(WxManager, create_check_box), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_box_sizer@ create_box_sizer(int orientation)", asMETHOD(WxManager, create_box_sizer), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx", "wx_panel@ create_panel(wx_window@, int style = WX_TAB_TRAVERSAL)", 
-    asMETHOD(WxManager, create_panel), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_panel@ create_panel(wx_window@, int style = WX_TAB_TRAVERSAL)", asMETHOD(WxManager, create_panel), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_static_text@ create_static_text(wx_window@, const string &in label, int style = 0)", asMETHOD(WxManager, create_static_text), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_text_control@ create_text_control(wx_window@, const string &in text = \"\", int style = 0)", asMETHOD(WxManager, create_text_control), asCALL_THISCALL);
     return true;
