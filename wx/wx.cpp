@@ -730,6 +730,11 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterEnumValue("wx_user_attention", "WX_USER_ATTENTION_INFO", wxUSER_ATTENTION_INFO);
     engine->RegisterEnumValue("wx_user_attention", "WX_USER_ATTENTION_ERROR", wxUSER_ATTENTION_ERROR);
 
+    engine->RegisterEnum("wx_checkbox_state");
+    engine->RegisterEnumValue("wx_checkbox_state", "WX_CHK_UNCHECKED", wxCHK_UNCHECKED);
+    engine->RegisterEnumValue("wx_checkbox_state", "WX_CHK_CHECKED", wxCHK_CHECKED);
+    engine->RegisterEnumValue("wx_checkbox_state", "WX_CHK_UNDETERMINED", wxCHK_UNDETERMINED);
+
     register_key_codes(engine);
 
     engine->RegisterObjectType("wx_window", 0, asOBJ_REF);
@@ -756,6 +761,9 @@ plugin_main(nvgt_plugin_shared* shared) {
     REGISTER_WX_CONTROL("wx_check_box", wxCheckBox);
     engine->RegisterObjectMethod("wx_check_box", "bool get_value()", asMETHOD(wxCheckBox, GetValue), asCALL_THISCALL);    
     engine->RegisterObjectMethod("wx_check_box", "void set_value(bool)", asMETHOD(wxCheckBox, SetValue), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_check_box", "wx_checkbox_state get_3state_value()", asMETHOD(wxCheckBox, Get3StateValue), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_check_box", "void set_3state_value(wx_checkbox_state state)", asMETHOD(wxCheckBox, Set3StateValue), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_check_box", "bool is_3rd_state_allowed_for_user()", asMETHOD(wxCheckBox, Is3rdStateAllowedForUser), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_check_box", "bool is_3state()", asMETHOD(wxCheckBox, Is3State), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_check_box", "bool is_checked()", asMETHOD(wxCheckBox, IsChecked), asCALL_THISCALL);
     REGISTER_WX_CONTROL("wx_static_text", wxStaticText);
