@@ -483,6 +483,30 @@ void wx_text_entry_set_max_length(wxWindow* self, int len) {
     if (auto e = GetEntry(self)) e->SetMaxLength((unsigned long)len); 
 }
 
+wxRadioButton* wx_radio_button_get_first_in_group(wxRadioButton* self) {
+    wxRadioButton* rb = self ? self->GetFirstInGroup() : nullptr;
+    if (rb) AddRef(rb);
+    return rb;
+}
+
+wxRadioButton* wx_radio_button_get_last_in_group(wxRadioButton* self) {
+    wxRadioButton* rb = self ? self->GetLastInGroup() : nullptr;
+    if (rb) AddRef(rb);
+    return rb;
+}
+
+wxRadioButton* wx_radio_button_get_next_in_group(wxRadioButton* self) {
+    wxRadioButton* rb = self ? self->GetNextInGroup() : nullptr;
+    if (rb) AddRef(rb);
+    return rb;
+}
+
+wxRadioButton* wx_radio_button_get_previous_in_group(wxRadioButton* self) {
+    wxRadioButton* rb = self ? self->GetPreviousInGroup() : nullptr;
+    if (rb) AddRef(rb);
+    return rb;
+}
+
 class NVGTApp : public wxApp {
 public:
     bool OnInit() override { return true; }
@@ -544,6 +568,10 @@ public:
     wxCheckBox* create_check_box(wxWindow* parent, const std::string& label, long style = 0) {
         wxString wx_s = wxString::FromUTF8(label.c_str());
         return Track (new wxCheckBox(parent, wxID_ANY, wx_s, wxDefaultPosition, wxDefaultSize, style, wxDefaultValidator, wx_s));
+    }
+    wxRadioButton* create_radio_button(wxWindow* parent, const std::string& label, long style = 0) {
+        wxString wx_s = wxString::FromUTF8(label.c_str());
+        return Track(new wxRadioButton(parent, wxID_ANY, wx_s, wxDefaultPosition, wxDefaultSize, style, wxDefaultValidator, wx_s));
     }
 };
 
@@ -816,6 +844,7 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_TEXT_ENTER", wxEVT_TEXT_ENTER);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_TEXT_URL", wxEVT_TEXT_URL);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_TEXT_MAXLEN", wxEVT_TEXT_MAXLEN);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_RADIOBUTTON", wxEVT_RADIOBUTTON);
 
     engine->RegisterEnum("wx_style");
 //wx_window
@@ -874,6 +903,9 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterEnumValue("wx_style", "WX_TE_CHARWRAP", wxTE_CHARWRAP);
     engine->RegisterEnumValue("wx_style", "WX_TE_WORDWRAP", wxTE_WORDWRAP);
     engine->RegisterEnumValue("wx_style", "WX_TE_BESTWRAP", wxTE_BESTWRAP);
+//wx_radio_button
+    engine->RegisterEnumValue("wx_style", "WX_RB_GROUP", wxRB_GROUP);
+    engine->RegisterEnumValue("wx_style", "WX_RB_SINGLE", wxRB_SINGLE);
 
     engine->RegisterEnum("wx_user_attention");
     engine->RegisterEnumValue("wx_user_attention", "WX_USER_ATTENTION_INFO", wxUSER_ATTENTION_INFO);
@@ -927,6 +959,13 @@ plugin_main(nvgt_plugin_shared* shared) {
     REGISTER_WX_CONTROL("wx_text_control", wxTextCtrl);
     engine->RegisterObjectMethod("wx_text_control", "wx_text_entry@ opImplCast()", asFUNCTION(to_text_entry_as_win<wxTextCtrl>), asCALL_CDECL_OBJFIRST); \
     REG_TEXT_ENTRY_METHODS("wx_text_control");
+    REGISTER_WX_CONTROL("wx_radio_button", wxRadioButton);
+    engine->RegisterObjectMethod("wx_radio_button", "bool get_value()", asMETHOD(wxRadioButton, GetValue), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_radio_button", "void set_value(bool value)", asMETHOD(wxRadioButton, SetValue), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_radio_button", "wx_radio_button@ get_first_in_group()", asFUNCTION(wx_radio_button_get_first_in_group), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_button", "wx_radio_button@ get_last_in_group()", asFUNCTION(wx_radio_button_get_last_in_group), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_button", "wx_radio_button@ get_next_in_group()", asFUNCTION(wx_radio_button_get_next_in_group), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_button", "wx_radio_button@ get_previous_in_group()", asFUNCTION(wx_radio_button_get_previous_in_group), asCALL_CDECL_OBJFIRST);
 
     engine->RegisterObjectMethod("wx_event", "wx_key_event@ opCast()", asFUNCTION(event_to_derived<wxKeyEvent>), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectMethod("wx_event", "wx_mouse_event@ opCast()", asFUNCTION(event_to_derived<wxMouseEvent>), asCALL_CDECL_OBJLAST);
@@ -994,5 +1033,6 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterObjectMethod("wx", "wx_panel@ create_panel(wx_window@, int style = WX_TAB_TRAVERSAL)", asMETHOD(WxManager, create_panel), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_static_text@ create_static_text(wx_window@, const string &in label, int style = 0)", asMETHOD(WxManager, create_static_text), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_text_control@ create_text_control(wx_window@, const string &in text = \"\", int style = 0)", asMETHOD(WxManager, create_text_control), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_radio_button@ create_radio_button(wx_window@, const string &in label, int style = 0)", asMETHOD(WxManager, create_radio_button), asCALL_THISCALL);
     return true;
 }
