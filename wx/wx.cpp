@@ -206,18 +206,26 @@ void wx_window_set_foreground_colour(wxWindow* self, int r, int g, int b) {
     }
 }
 
+void wx_window_get_position(wxWindow* self, int& x, int& y) {
+    if (self) { wxPoint p = self->GetPosition(); x = p.x; y = p.y; }
+}
+
+void wx_window_set_position(wxWindow* self, int x, int y) {
+    if (self) self->SetPosition(wxPoint(x, y));
+}
+
 void wx_window_get_size(wxWindow* self, int &out_w, int &out_h) {
     if (self) self->GetSize(&out_w, &out_h);
+}
+
+void wx_window_set_size(wxWindow* self, int w, int h) {
+    if (self) self->SetSize(w, h);
 }
 
 wxSizer* wx_window_get_sizer(wxWindow* self) {
     wxSizer* s = self->GetSizer();
     if (s) AddRef(s);
     return s;
-}
-
-void wx_window_set_size(wxWindow* self, int w, int h) {
-    if (self) self->SetSize(w, h);
 }
 
 std::string wx_control_get_label(wxControl* self) { return self ? std::string(self->GetLabel().utf8_str()) : ""; }
@@ -276,6 +284,120 @@ bool wx_sizer_detach_window(wxSizer* self, wxWindow* win) {
 
 bool wx_sizer_detach_sizer(wxSizer* self, wxSizer* s) {
     return self ? self->Detach(s) : false;
+}
+
+void wx_sizer_insert_window(wxSizer* self, int index, wxWindow* win, int proportion, int flag, int border) {
+    if (self && win) self->Insert(index, win, proportion, flag, border);
+}
+
+void wx_sizer_insert_sizer(wxSizer* self, int index, wxSizer* s, int proportion, int flag, int border) {
+    if (self && s) self->Insert(index, s, proportion, flag, border);
+}
+
+void wx_sizer_prepend_window(wxSizer* self, wxWindow* win, int proportion, int flag, int border) {
+    if (self && win) self->Prepend(win, proportion, flag, border);
+}
+
+void wx_sizer_prepend_sizer(wxSizer* self, wxSizer* s, int proportion, int flag, int border) {
+    if (self && s) self->Prepend(s, proportion, flag, border);
+}
+
+bool wx_sizer_remove(wxSizer* self, int index) {
+    return self ? self->Remove(index) : false;
+}
+
+int wx_sizer_find_window(wxSizer* self, wxWindow* win) {
+    if (!self || !win) return -1;    
+    int count = self->GetItemCount();
+    for (int i = 0; i < count; ++i) {
+        wxSizerItem* item = self->GetItem(i);
+        if (item && item->GetWindow() == win) return i;
+    }
+    return -1;
+}
+
+int wx_sizer_find_sizer(wxSizer* self, wxSizer* s) {
+    if (!self || !s) return -1;    
+    int count = self->GetItemCount();
+    for (int i = 0; i < count; ++i) {
+        wxSizerItem* item = self->GetItem(i);
+        if (item && item->GetSizer() == s) return i;
+    }
+    return -1;
+}
+
+bool wx_sizer_set_item_proportion_win(wxSizer* self, wxWindow* win, int prop) {
+    wxSizerItem* item = self->GetItem(win);
+    if (item) { item->SetProportion(prop); return true; }
+    return false;
+}
+
+bool wx_sizer_set_item_proportion_sz(wxSizer* self, wxSizer* s, int prop) {
+    wxSizerItem* item = self->GetItem(s);
+    if (item) { item->SetProportion(prop); return true; }
+    return false;
+}
+
+int wx_sizer_get_item_proportion_win(wxSizer* self, wxWindow* win) {
+    wxSizerItem* item = self->GetItem(win);
+    return item ? item->GetProportion() : 0;
+}
+
+int wx_sizer_get_item_proportion_sz(wxSizer* self, wxSizer* s) {
+    wxSizerItem* item = self->GetItem(s);
+    return item ? item->GetProportion() : 0;
+}
+
+bool wx_sizer_set_item_flag_win(wxSizer* self, wxWindow* win, int flag) {
+    wxSizerItem* item = self->GetItem(win);
+    if (item) { item->SetFlag(flag); return true; }
+    return false;
+}
+
+bool wx_sizer_set_item_flag_sz(wxSizer* self, wxSizer* s, int flag) {
+    wxSizerItem* item = self->GetItem(s);
+    if (item) { item->SetFlag(flag); return true; }
+    return false;
+}
+
+int wx_sizer_get_item_flag_win(wxSizer* self, wxWindow* win) {
+    wxSizerItem* item = self->GetItem(win);
+    return item ? item->GetFlag() : 0;
+}
+
+int wx_sizer_get_item_flag_sz(wxSizer* self, wxSizer* s) {
+    wxSizerItem* item = self->GetItem(s);
+    return item ? item->GetFlag() : 0;
+}
+
+bool wx_sizer_set_item_border_win(wxSizer* self, wxWindow* win, int border) {
+    wxSizerItem* item = self->GetItem(win);
+    if (item) { item->SetBorder(border); return true; }
+    return false;
+}
+
+bool wx_sizer_set_item_border_sz(wxSizer* self, wxSizer* s, int border) {
+    wxSizerItem* item = self->GetItem(s);
+    if (item) { item->SetBorder(border); return true; }
+    return false;
+}
+
+int wx_sizer_get_item_border_win(wxSizer* self, wxWindow* win) {
+    wxSizerItem* item = self->GetItem(win);
+    return item ? item->GetBorder() : 0;
+}
+
+int wx_sizer_get_item_border_sz(wxSizer* self, wxSizer* s) {
+    wxSizerItem* item = self->GetItem(s);
+    return item ? item->GetBorder() : 0;
+}
+
+void wx_sizer_get_position(wxSizer* self, int& x, int& y) {
+    if (self) { wxPoint p = self->GetPosition(); x = p.x; y = p.y; }
+}
+
+void wx_sizer_get_size(wxSizer* self, int& w, int& h) {
+    if (self) { wxSize s = self->GetSize(); w = s.x; h = s.y; }
 }
 
 wxTextEntry* GetEntry(wxWindow* win) {
@@ -492,6 +614,8 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
     engine->RegisterObjectMethod(name, "void set_foreground_colour(int r, int g, int b)", asFUNCTION(wx_window_set_foreground_colour), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "wx_sizer@ get_sizer()", asFUNCTION(wx_window_get_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_sizer(wx_sizer@)", asMETHOD(wxWindow, SetSizer), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void get_position(int &out width, int &out height)", asFUNCTION(wx_window_get_position), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_position(int width, int height)", asFUNCTION(wx_window_set_position), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void get_size(int &out width, int &out height)", asFUNCTION(wx_window_get_size), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_size(int width, int height)", asFUNCTION(wx_window_set_size), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool is_shown()", asMETHOD(wxWindow, IsShown), asCALL_THISCALL); \
@@ -520,16 +644,39 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
     engine->RegisterObjectMethod(name, "void add(wx_sizer@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_add_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void add_spacer(int size)", asMETHOD(wxSizer, AddSpacer), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void add_stretch_spacer(int proportion = 1)", asMETHOD(wxSizer, AddStretchSpacer), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void insert(int index, wx_window@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_insert_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void insert(int index, wx_sizer@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_insert_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void prepend(wx_window@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_prepend_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void prepend(wx_sizer@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_prepend_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool detach(wx_window@)", asFUNCTION(wx_sizer_detach_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool detach(wx_sizer@)", asFUNCTION(wx_sizer_detach_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool remove(int index)", asFUNCTION(wx_sizer_remove), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool show(wx_window@, bool show = true, bool recursive = false)", asFUNCTION(wx_sizer_show_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool show(wx_sizer@, bool show = true, bool recursive = false)", asFUNCTION(wx_sizer_show_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool hide(wx_window@, bool recursive = false)", asFUNCTION(wx_sizer_hide_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool hide(wx_sizer@, bool recursive = false)", asFUNCTION(wx_sizer_hide_sizer), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "bool detach(wx_window@)", asFUNCTION(wx_sizer_detach_window), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "bool detach(wx_sizer@)", asFUNCTION(wx_sizer_detach_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int find(wx_window@)", asFUNCTION(wx_sizer_find_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int find(wx_sizer@)", asFUNCTION(wx_sizer_find_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool replace(wx_window@, wx_window@, bool recursive = false)", asFUNCTION(wx_sizer_replace_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool replace(wx_sizer@, wx_sizer@, bool recursive = false)", asFUNCTION(wx_sizer_replace_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void clear(bool delete_windows = false)", asMETHOD(wxSizer, Clear), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "void layout()", asMETHOD(wxSizer, Layout), asCALL_THISCALL);
+    engine->RegisterObjectMethod(name, "void layout()", asMETHOD(wxSizer, Layout), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void get_position(int &out width, int &out height)", asFUNCTION(wx_sizer_get_position), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void get_size(int &out width, int &out height)", asFUNCTION(wx_sizer_get_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int get_item_count()", asMETHOD(wxSizer, GetItemCount), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool is_empty()", asMETHOD(wxSizer, IsEmpty), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "int get_item_proportion(wx_window@)", asFUNCTION(wx_sizer_get_item_proportion_win), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool set_item_proportion(wx_window@, int proportion)", asFUNCTION(wx_sizer_set_item_proportion_win), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int get_item_proportion(wx_sizer@)", asFUNCTION(wx_sizer_get_item_proportion_sz), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool set_item_proportion(wx_sizer@, int proportion)", asFUNCTION(wx_sizer_set_item_proportion_sz), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int get_item_flag(wx_window@)", asFUNCTION(wx_sizer_get_item_flag_win), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool set_item_flag(wx_window@, int flag)", asFUNCTION(wx_sizer_set_item_flag_win), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int get_item_flag(wx_sizer@)", asFUNCTION(wx_sizer_get_item_flag_sz), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool set_item_flag(wx_sizer@, int flag)", asFUNCTION(wx_sizer_set_item_flag_sz), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int get_item_border(wx_window@)", asFUNCTION(wx_sizer_get_item_border_win), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool set_item_border(wx_window@, int border)", asFUNCTION(wx_sizer_set_item_border_win), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int get_item_border(wx_sizer@)", asFUNCTION(wx_sizer_get_item_border_sz), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool set_item_border(wx_sizer@, int border)", asFUNCTION(wx_sizer_set_item_border_sz), asCALL_CDECL_OBJFIRST);
 
 #define REG_TEXT_ENTRY_METHODS(name) \
     engine->RegisterObjectMethod(name, "string get_value()", asFUNCTION(wx_text_entry_get_value), asCALL_CDECL_OBJFIRST); \
