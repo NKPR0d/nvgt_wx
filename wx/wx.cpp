@@ -246,6 +246,38 @@ void wx_sizer_add_sizer(wxSizer* self, wxSizer* sizer, int proportion, int flag,
     if (self && sizer) self->Add(sizer, proportion, flag, border);
 }
 
+bool wx_sizer_show_window(wxSizer* self, wxWindow* win, bool show, bool recursive) {
+    return self ? self->Show(win, show, recursive) : false;
+}
+
+bool wx_sizer_show_sizer(wxSizer* self, wxSizer* s, bool show, bool recursive) {
+    return self ? self->Show(s, show, recursive) : false;
+}
+
+bool wx_sizer_hide_window(wxSizer* self, wxWindow* win, bool recursive) {
+    return self ? self->Hide(win, recursive) : false;
+}
+
+bool wx_sizer_hide_sizer(wxSizer* self, wxSizer* s, bool recursive) {
+    return self ? self->Hide(s, recursive) : false;
+}
+
+bool wx_sizer_replace_window(wxSizer* self, wxWindow* oldwin, wxWindow* newwin, bool recursive) {
+    return self ? self->Replace(oldwin, newwin, recursive) : false;
+}
+
+bool wx_sizer_replace_sizer(wxSizer* self, wxSizer* oldsizer, wxSizer* newsizer, bool recursive) {
+    return self ? self->Replace(oldsizer, newsizer, recursive) : false;
+}
+
+bool wx_sizer_detach_window(wxSizer* self, wxWindow* win) {
+    return self ? self->Detach(win) : false;
+}
+
+bool wx_sizer_detach_sizer(wxSizer* self, wxSizer* s) {
+    return self ? self->Detach(s) : false;
+}
+
 wxTextEntry* GetEntry(wxWindow* win) {
     return dynamic_cast<wxTextEntry*>(win);
 }
@@ -448,9 +480,12 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
     engine->RegisterObjectMethod(name, "void refresh()", asMETHOD(wxWindow, Refresh), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void update()", asMETHOD(wxWindow, Update), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "bool destroy()", asMETHOD(wxWindow, Destroy), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool close(bool force = false)", asMETHOD(wxWindow, Close), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void bind(wx_event_type, wx_callback@)", asFUNCTION(wx_window_bind), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool navigate(wx_navigation flag = WX_NAVIGATION_FORWARD)", asMETHOD(wxWindow, Navigate), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "string get_tool_tip()", asFUNCTION(wx_window_get_tool_tip), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_tool_tip(const string &in tool_tip)", asFUNCTION(wx_window_set_tool_tip), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void unset_tool_tip()", asMETHOD(wxWindow, UnsetToolTip), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void get_background_colour(int &out r, int &out g, int &out b)", asFUNCTION(wx_window_get_background_colour), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_background_colour(int r, int g, int b)", asFUNCTION(wx_window_set_background_colour), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void get_foreground_colour(int &out r, int &out g, int &out b)", asFUNCTION(wx_window_get_foreground_colour), asCALL_CDECL_OBJFIRST); \
@@ -483,6 +518,17 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
 #define REG_SIZER_METHODS(name) \
     engine->RegisterObjectMethod(name, "void add(wx_window@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_add_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void add(wx_sizer@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_add_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void add_spacer(int size)", asMETHOD(wxSizer, AddSpacer), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void add_stretch_spacer(int proportion = 1)", asMETHOD(wxSizer, AddStretchSpacer), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool show(wx_window@, bool show = true, bool recursive = false)", asFUNCTION(wx_sizer_show_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool show(wx_sizer@, bool show = true, bool recursive = false)", asFUNCTION(wx_sizer_show_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool hide(wx_window@, bool recursive = false)", asFUNCTION(wx_sizer_hide_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool hide(wx_sizer@, bool recursive = false)", asFUNCTION(wx_sizer_hide_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool detach(wx_window@)", asFUNCTION(wx_sizer_detach_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool detach(wx_sizer@)", asFUNCTION(wx_sizer_detach_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool replace(wx_window@, wx_window@, bool recursive = false)", asFUNCTION(wx_sizer_replace_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool replace(wx_sizer@, wx_sizer@, bool recursive = false)", asFUNCTION(wx_sizer_replace_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void clear(bool delete_windows = false)", asMETHOD(wxSizer, Clear), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void layout()", asMETHOD(wxSizer, Layout), asCALL_THISCALL);
 
 #define REG_TEXT_ENTRY_METHODS(name) \
@@ -735,6 +781,11 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterEnumValue("wx_checkbox_state", "WX_CHK_CHECKED", wxCHK_CHECKED);
     engine->RegisterEnumValue("wx_checkbox_state", "WX_CHK_UNDETERMINED", wxCHK_UNDETERMINED);
 
+    engine->RegisterEnum("wx_navigation");
+    engine->RegisterEnumValue("wx_navigation", "WX_NAVIGATION_FORWARD", 1);
+    engine->RegisterEnumValue("wx_navigation", "WX_NAVIGATION_BACKWARD", 2);
+    engine->RegisterEnumValue("wx_navigation", "WX_NAVIGATION_TABBING", 4);
+
     register_key_codes(engine);
 
     engine->RegisterObjectType("wx_window", 0, asOBJ_REF);
@@ -760,7 +811,7 @@ plugin_main(nvgt_plugin_shared* shared) {
     REGISTER_WX_CONTROL("wx_button", wxButton);
     REGISTER_WX_CONTROL("wx_check_box", wxCheckBox);
     engine->RegisterObjectMethod("wx_check_box", "bool get_value()", asMETHOD(wxCheckBox, GetValue), asCALL_THISCALL);    
-    engine->RegisterObjectMethod("wx_check_box", "void set_value(bool)", asMETHOD(wxCheckBox, SetValue), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_check_box", "void set_value(bool value)", asMETHOD(wxCheckBox, SetValue), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_check_box", "wx_checkbox_state get_3state_value()", asMETHOD(wxCheckBox, Get3StateValue), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_check_box", "void set_3state_value(wx_checkbox_state state)", asMETHOD(wxCheckBox, Set3StateValue), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_check_box", "bool is_3rd_state_allowed_for_user()", asMETHOD(wxCheckBox, Is3rdStateAllowedForUser), asCALL_THISCALL);
@@ -824,7 +875,7 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterObjectMethod("wx", "void update()", asMETHOD(WxManager, update), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_frame@ create_frame(const string &in title, int width, int height, int style = WX_DEFAULT_FRAME_STYLE)", asMETHOD(WxManager, create_frame), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_button@ create_button(wx_window@, const string &in label, int style = 0)", asMETHOD(WxManager, create_button), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx", "wx_check_box@ create_check_box(wx_window@, const string &in, int style = 0)", asMETHOD(WxManager, create_check_box), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_check_box@ create_check_box(wx_window@, const string &in label, int style = 0)", asMETHOD(WxManager, create_check_box), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_box_sizer@ create_box_sizer(int orientation)", asMETHOD(WxManager, create_box_sizer), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_panel@ create_panel(wx_window@, int style = WX_TAB_TRAVERSAL)", asMETHOD(WxManager, create_panel), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_static_text@ create_static_text(wx_window@, const string &in label, int style = 0)", asMETHOD(WxManager, create_static_text), asCALL_THISCALL);
