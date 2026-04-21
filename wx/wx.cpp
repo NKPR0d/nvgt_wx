@@ -74,6 +74,7 @@ void Release(void* ptr) {
         }
     }
 }
+
 class ContextGuard {
     asIScriptContext* ctx;
 public:
@@ -306,6 +307,24 @@ void wx_sizer_prepend_sizer(wxSizer* self, wxSizer* s, int proportion, int flag,
     if (self && s) self->Prepend(s, proportion, flag, border);
 }
 
+wxSizerItem* wx_sizer_get_item_window(wxSizer* self, wxWindow* win) {
+    wxSizerItem* item = self ? self->GetItem(win) : nullptr;
+    if (item) AddRef(item);
+    return item;
+}
+
+wxSizerItem* wx_sizer_get_item_sz(wxSizer* self, wxSizer* s) {
+    wxSizerItem* item = self ? self->GetItem(s) : nullptr;
+    if (item) AddRef(item);
+    return item;
+}
+
+wxSizerItem* wx_sizer_get_item_index(wxSizer* self, int index) {
+    wxSizerItem* item = self ? self->GetItem(index) : nullptr;
+    if (item) AddRef(item);
+    return item;
+}
+
 int wx_sizer_find_window(wxSizer* self, wxWindow* win) {
     if (!self || !win) return -1;    
     int count = self->GetItemCount();
@@ -332,6 +351,18 @@ void wx_sizer_get_position(wxSizer* self, int& x, int& y) {
 
 void wx_sizer_get_size(wxSizer* self, int& w, int& h) {
     if (self) { wxSize s = self->GetSize(); w = s.x; h = s.y; }
+}
+
+wxWindow* wx_sizer_item_get_window(wxSizerItem* self) {
+    wxWindow* w = self ? self->GetWindow() : nullptr;
+    if (w) AddRef(w);
+    return w;
+}
+
+wxSizer* wx_sizer_item_get_sizer(wxSizerItem* self) {
+    wxSizer* s = self ? self->GetSizer() : nullptr;
+    if (s) AddRef(s);
+    return s;
 }
 
 wxTextEntry* GetEntry(wxWindow* win) {
@@ -582,13 +613,16 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
     engine->RegisterObjectMethod(name, "void insert(int index, wx_sizer@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_insert_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void prepend(wx_window@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_prepend_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void prepend(wx_sizer@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_prepend_sizer), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "bool detach(int index)", asFUNCTION(wx_sizer_detach_index), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool detach(wx_window@)", asFUNCTION(wx_sizer_detach_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool detach(wx_sizer@)", asFUNCTION(wx_sizer_detach_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool detach(int index)", asFUNCTION(wx_sizer_detach_index), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool show(wx_window@, bool show = true, bool recursive = false)", asFUNCTION(wx_sizer_show_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool show(wx_sizer@, bool show = true, bool recursive = false)", asFUNCTION(wx_sizer_show_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool hide(wx_window@, bool recursive = false)", asFUNCTION(wx_sizer_hide_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool hide(wx_sizer@, bool recursive = false)", asFUNCTION(wx_sizer_hide_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_sizer_item@ get_item(wx_window@)", asFUNCTION(wx_sizer_get_item_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_sizer_item@ get_item(wx_sizer@)", asFUNCTION(wx_sizer_get_item_sz), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_sizer_item@ get_item(int index)", asFUNCTION(wx_sizer_get_item_index), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "int find(wx_window@)", asFUNCTION(wx_sizer_find_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "int find(wx_sizer@)", asFUNCTION(wx_sizer_find_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool replace(wx_window@, wx_window@, bool recursive = false)", asFUNCTION(wx_sizer_replace_window), asCALL_CDECL_OBJFIRST); \
@@ -862,6 +896,8 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterObjectType("wx_control", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_text_entry", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_sizer", 0, asOBJ_REF);
+    engine->RegisterObjectType("wx_sizer_item", 0, asOBJ_REF);
+    REG_BASE_REF("wx_sizer_item");
     engine->RegisterObjectType("wx_event", 0, asOBJ_REF | asOBJ_NOCOUNT);
     engine->RegisterObjectType("wx_key_event", 0, asOBJ_REF | asOBJ_NOCOUNT);
     engine->RegisterObjectType("wx_mouse_event", 0, asOBJ_REF | asOBJ_NOCOUNT);
@@ -936,6 +972,15 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterObjectMethod("wx_mouse_event", "bool moving()", asMETHOD(wxMouseEvent, Moving), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_mouse_event", "bool entering()", asMETHOD(wxMouseEvent, Entering), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_mouse_event", "bool leaving()", asMETHOD(wxMouseEvent, Leaving), asCALL_THISCALL);
+
+    engine->RegisterObjectMethod("wx_sizer_item", "wx_window@ get_window()", asFUNCTION(wx_sizer_item_get_window), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "wx_sizer@ get_sizer()", asFUNCTION(wx_sizer_item_get_sizer), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "int get_proportion()", asMETHOD(wxSizerItem, GetProportion), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_sizer_item", "void set_proportion(int proportion)", asMETHOD(wxSizerItem, SetProportion), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_sizer_item", "int get_flag()", asMETHOD(wxSizerItem, GetFlag), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_sizer_item", "void set_flag(int flag)", asMETHOD(wxSizerItem, SetFlag), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_sizer_item", "int get_border()", asMETHOD(wxSizerItem, GetBorder), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_sizer_item", "void set_border(int border)", asMETHOD(wxSizerItem, SetBorder), asCALL_THISCALL);
 
     engine->RegisterObjectType("wx", sizeof(WxManager), asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_C);
     engine->RegisterObjectBehaviour("wx", asBEHAVE_CONSTRUCT, "void f()", asFUNCTION(WxConstructor), asCALL_CDECL_OBJLAST);
