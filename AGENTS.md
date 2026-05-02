@@ -159,6 +159,31 @@ instead of `Track`.
   "string get_title() const property"
   "void set_title(const string &in title) property"
   ```
+  Getters carry `const` even when registered via `asCALL_CDECL_OBJFIRST`
+  (the qualifier only affects AngelScript-side type checking and is
+  required for symmetric `const`-ness across getter/setter pairs).
+  Setters never carry `const`.
+- **Property names are derived by stripping `get_`/`set_`.** That
+  derived name must be a valid AngelScript identifier and must not
+  collide with the type/keyword namespace. In practice:
+  - Do **not** use `property` if the derived name would be a reserved
+    AngelScript keyword (`int`, `bool`, `void`, `float`, `double`,
+    `auto`, `if`, `for`, ...). Example: `int get_int() property`
+    derives the property name `int`, which the parser cannot accept
+    as a member name.
+  - Do **not** use `property` if the derived name starts with a digit
+    or any other character that is not a valid identifier start.
+    Example: `get_3state_value()` cannot become a property because
+    `3state_value` is not a valid identifier.
+  - Be cautious if the derived name collides with a registered type
+    name (e.g. `string`, `array`, `dictionary`). The parser may
+    accept it, but it is a footgun for script authors and is not
+    worth the saved keystrokes.
+  In all of the above cases, register the method without `property`.
+  The explicit `obj.get_xxx()` / `obj.set_xxx(v)` form continues to
+  work. Add a one-line comment above the registration explaining why
+  `property` is intentionally absent so the next contributor does not
+  "fix" it.
 - Strings cross the boundary as `std::string` in UTF-8, converted with
   `wxString::FromUTF8(...)` and `.utf8_str()`. Do not use
   `wxString::FromAscii` or pass `const char*` raw.
@@ -179,23 +204,54 @@ instead of `Track`.
 
 ## Things to know before changing the bridge
 
-- `OnWxEvent` should call `event.Skip()` by default so wxWidgets can
-  continue propagating the event. Scripts can disable this from the
-  callback by calling `e.skip(false)`.
+- `OnWxEvent` calls `event.Skip(true)` **before** invoking the script
+  callback, not after. The order is deliberate: even if `ctx->Execute()`
+  raises a script exception, the event still propagates, so a buggy
+  callback cannot accidentally swallow `EVT_CLOSE` / `EVT_KEY_DOWN` /
+  etc. on the rest of the window chain. Scripts can override this from
+  inside the callback by calling `e.skip(false)`.
 - `wx_window_bind` must not call `wxEvtHandler::Bind(...)` more than
   once for the same `(object, event_type)` pair, otherwise wxWidgets
-  fires the trampoline multiple times per event.
+  fires the trampoline multiple times per event. When replacing the
+  callback for a known pair, only the entry in `g_event_handlers` is
+  updated; the wxWidgets-side `Bind` already exists.
+- `wx_window_unbind` must call `Unbind` on the same `(event_type,
+  &OnWxEvent, wxID_ANY)` triple that `Bind` was called with, otherwise
+  wxWidgets will not find the handler to remove.
 - `WxManager` must be registered with `asOBJ_VALUE | asOBJ_APP_CLASS_CD`
   (it has a non-trivial constructor and destructor); `asOBJ_POD` is
   incorrect.
 - `wxEntryCleanup()` is currently not called. If the plugin ever gains
   a real shutdown hook it should be invoked there.
+- **`asMETHOD` does not propagate C++ default arguments.** If the
+  underlying C++ method has defaulted parameters and the AngelScript
+  signature omits them, the C++ function still expects all parameters
+  on the stack/registers and will read garbage. When wrapping such a
+  method, either expose the full parameter list in AngelScript (with
+  AngelScript-level defaults), or wrap it in a free function that
+  fills in the default and call that via `asFUNCTION /
+  asCALL_CDECL_OBJFIRST`. Existing example to revisit:
+  `wxWindow::SetSizer(wxSizer*, bool deleteOld = true)`.
+- `wxCommandEvent::GetSelection()` and `wxCommandEvent::GetInt()` read
+  the **same** internal field (`m_commandInt`). The naming is upstream
+  semantics: `GetSelection` is meaningful for list-style controls,
+  `GetInt` for general payload. Both wrappers are exposed because
+  upstream exposes both, but writers should pick the one that matches
+  the control they are reading from.
+- `wxCommandEvent::GetExtraLong()` / `SetExtraLong()` use C++ `long`,
+  which is 32-bit on Windows MSVC x64 (the current build target) but
+  64-bit on Linux x86_64. The AngelScript signature is registered as
+  `int` to match the Windows ABI. Any future Linux build needs to
+  switch to `int64` plus a `static_cast<long>` shim in a wrapper, not
+  blindly bind `asMETHOD(wxCommandEvent, SetExtraLong)`.
 
 ## Roadmap (high-level)
 
-- **Phase 0 — foundation:** `wx_command_event`, value types
-  (`wx_point/size/rect/colour/font`), per-control style enums, `unbind`,
-  default `Skip()`, AS-flag fixes, markdown documentation, CI.
+- **Phase 0 — foundation:** value types (`wx_point/size/rect/colour/font`),
+  per-control style enums, `wxEntryCleanup()` on shutdown, markdown
+  documentation, CI. (`wx_command_event`, `unbind`, default `Skip()`,
+  `bind` deduplication and the `WxManager` AS-flag fix have already
+  landed.)
 - **Phase 1 — basic GUI:** the rest of the sizers; dialogs
   (`wx_dialog`, `wx_message_dialog`, `wx_file_dialog`, …); selectors
   (`wx_choice`, `wx_combo_box`, `wx_list_box`, `wx_radio_box`); range
