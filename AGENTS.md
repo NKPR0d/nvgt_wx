@@ -20,7 +20,23 @@ README.md              Short description.
 AGENTS.md              This file.
 wx/
 ├── _SConscript        SCons build script. Plugged into NVGT's plugin/ tree.
-├── wx.cpp             All AngelScript bindings live here.
+├── wx.cpp             Plugin entry point. Holds only plugin_main(), which
+│                      calls into src/register.cpp.
+├── src/
+│   ├── common.h       Shared types, globals (extern), inline helpers/
+│   │                  templates, and forward declarations consumed by
+│   │                  every other translation unit.
+│   ├── runtime.cpp    Bridge runtime: script-context pool, AngelScript
+│   │                  ref-counting table for wx objects, event-handler
+│   │                  map, OnWxEvent trampoline, wx_window_bind/unbind.
+│   ├── helpers.cpp    Free-function adapters (wx_*) registered via
+│   │                  asCALL_CDECL_OBJFIRST. Add new wrappers here.
+│   ├── manager.cpp    NVGTApp + WxManager (the value type `wx`) plus all
+│   │                  create_* factories. Self-contained: exposes only
+│   │                  register_wx_manager(engine).
+│   └── register.cpp   Every enum, type and method registration plus the
+│                      REG_* macros. register_all_types() is called from
+│                      plugin_main().
 ├── dll/               Pre-built wxWidgets shared libraries (Windows).
 ├── lib/               Pre-built wxWidgets import libraries and setup.h
 │                      (mswu/wx/setup.h).
@@ -28,6 +44,19 @@ wx/
 └── doc/               wxWidgets-3.3.2.chm (upstream wxWidgets help, not
                        plugin docs).
 ```
+
+When adding a new widget the change typically lives in three files:
+
+- `manager.cpp`: a new `create_*` factory and its `RegisterObjectMethod`
+  line in `register_wx_manager`.
+- `helpers.cpp`: any free-function wrappers needed for properties or
+  defaulted arguments, declared in `common.h`.
+- `register.cpp`: a `REGISTER_WX_*` macro invocation plus per-widget
+  `RegisterObjectMethod` calls.
+
+Cross-cutting bridge changes (ref-counting, event dispatch, the context
+pool) belong in `runtime.cpp`. `common.h` only owns shared declarations
+and inline helpers; it should not gain function bodies.
 
 ## How the plugin is built
 
@@ -54,11 +83,13 @@ The plugin exposes a single C entry point through NVGT's plugin system:
 ```cpp
 plugin_main(nvgt_plugin_shared* shared) {
     if (!prepare_plugin(shared)) return false;
-    asIScriptEngine* engine = shared->script_engine;
-    // ... register types, enums and methods ...
+    register_all_types(shared->script_engine);
     return true;
 }
 ```
+
+`register_all_types()` lives in `src/register.cpp` and is the only thing
+`wx.cpp` calls. All bindings live under `src/`.
 
 NVGT's plugin ABI lives in
 [`src/nvgt_plugin.h`](https://github.com/samtupy/nvgt/blob/main/src/nvgt_plugin.h).
