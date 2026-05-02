@@ -148,6 +148,23 @@ bool wx_mouse_event_right_is_down(wxMouseEvent* self) { return self->RightIsDown
 bool wx_mouse_event_aux1_is_down(wxMouseEvent* self) { return self->Aux1IsDown(); }
 bool wx_mouse_event_aux2_is_down(wxMouseEvent* self) { return self->Aux2IsDown(); }
 
+// wxMouseEvent::Button{,Down,Up,DClick} take an int parameter. Button has
+// no C++ default; the others default to wxMOUSE_BTN_ANY. asMETHOD does
+// not propagate C++ defaults, so wrap them with explicit defaults so the
+// AS-side zero-arg signatures don't read garbage.
+bool wx_mouse_event_button(wxMouseEvent* self) {
+    return self ? self->Button(wxMOUSE_BTN_ANY) : false;
+}
+bool wx_mouse_event_button_down(wxMouseEvent* self) {
+    return self ? self->ButtonDown(wxMOUSE_BTN_ANY) : false;
+}
+bool wx_mouse_event_button_up(wxMouseEvent* self) {
+    return self ? self->ButtonUp(wxMOUSE_BTN_ANY) : false;
+}
+bool wx_mouse_event_button_dclick(wxMouseEvent* self) {
+    return self ? self->ButtonDClick(wxMOUSE_BTN_ANY) : false;
+}
+
 // wxCommandEvent helpers. wxCommandEvent is fired by most controls
 // (buttons, checkboxes, text controls, radio buttons, choices, list boxes,
 // menus, sliders, ...). Scripts need cheap access to its payload.
@@ -259,6 +276,15 @@ wxSizer* wx_window_get_sizer(wxWindow* self) {
     return s;
 }
 
+// Forwards to wxWindow::SetSizer with delete_old = false. The wx default is
+// true, but the plugin manages sizer lifetimes via its own ref counter, so
+// letting wxWidgets free a sizer underneath an outstanding AngelScript
+// handle would cause a use-after-free. The script-side bridge will delete
+// any orphaned sizer once its last handle is released.
+void wx_window_set_sizer(wxWindow* self, wxSizer* sizer) {
+    if (self) self->SetSizer(sizer, false);
+}
+
 std::string wx_control_get_label(wxControl* self) { return self ? std::string(self->GetLabel().utf8_str()) : ""; }
 
 void wx_control_set_label(wxControl* self, const std::string& label) {
@@ -275,6 +301,14 @@ std::string wx_tlw_get_title(wxTopLevelWindow* self) {
 
 void wx_tlw_set_title(wxTopLevelWindow* self, const std::string& title) {
     if (self) self->SetTitle(wxString::FromUTF8(title.c_str()));
+}
+
+// Forwards to wxTopLevelWindow::ShowFullScreen with the wx default style
+// wxFULLSCREEN_ALL. asMETHOD does not propagate C++ default arguments,
+// so binding ShowFullScreen directly would let the second parameter
+// read uninitialized stack/registers.
+bool wx_tlw_show_full_screen(wxTopLevelWindow* self, bool show) {
+    return self ? self->ShowFullScreen(show, wxFULLSCREEN_ALL) : false;
 }
 
 void wx_sizer_add_window(wxSizer* self, wxWindow* window, int proportion, int flag, int border) {
@@ -637,7 +671,7 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
     engine->RegisterObjectMethod(name, "void get_foreground_colour(int &out r, int &out g, int &out b)", asFUNCTION(wx_window_get_foreground_colour), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_foreground_colour(int r, int g, int b)", asFUNCTION(wx_window_set_foreground_colour), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "wx_sizer@ get_sizer() const property", asFUNCTION(wx_window_get_sizer), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_sizer(wx_sizer@) property", asMETHOD(wxWindow, SetSizer), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void set_sizer(wx_sizer@) property", asFUNCTION(wx_window_set_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void get_position(int &out width, int &out height)", asFUNCTION(wx_window_get_position), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_position(int width, int height)", asFUNCTION(wx_window_set_position), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void get_size(int &out width, int &out height)", asFUNCTION(wx_window_get_size), asCALL_CDECL_OBJFIRST); \
@@ -648,7 +682,7 @@ void WxDestructor(WxManager* self) { self->~WxManager(); }
 #define REG_TLW_METHODS(name) \
     engine->RegisterObjectMethod(name, "string get_title() const property", asFUNCTION(wx_tlw_get_title), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_title(const string &in title) property", asFUNCTION(wx_tlw_set_title), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "bool full_screen(bool show)", asMETHOD(wxTopLevelWindow, ShowFullScreen), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool full_screen(bool show)", asFUNCTION(wx_tlw_show_full_screen), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void maximize(bool maximize = true)", asMETHOD(wxTopLevelWindow, Maximize), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void iconize(bool iconize = true)", asMETHOD(wxTopLevelWindow, Iconize), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "bool is_full_screen()", asMETHOD(wxTopLevelWindow, IsFullScreen), asCALL_THISCALL); \
@@ -1014,10 +1048,10 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterObjectMethod("wx_key_event", "bool shift_down()", asFUNCTION(wx_key_event_shift_down), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_key_event", "bool alt_down()", asFUNCTION(wx_key_event_alt_down), asCALL_CDECL_OBJFIRST);
 
-    engine->RegisterObjectMethod("wx_mouse_event", "bool button()", asMETHOD(wxMouseEvent, Button), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool button_down()", asMETHOD(wxMouseEvent, ButtonDown), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool button_up()", asMETHOD(wxMouseEvent, ButtonUp), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool button_dclick()", asMETHOD(wxMouseEvent, ButtonDClick), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool button()", asFUNCTION(wx_mouse_event_button), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool button_down()", asFUNCTION(wx_mouse_event_button_down), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool button_up()", asFUNCTION(wx_mouse_event_button_up), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool button_dclick()", asFUNCTION(wx_mouse_event_button_dclick), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_mouse_event", "bool left_down()", asMETHOD(wxMouseEvent, LeftDown), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_mouse_event", "bool left_up()", asMETHOD(wxMouseEvent, LeftUp), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_mouse_event", "bool left_dclick()", asMETHOD(wxMouseEvent, LeftDClick), asCALL_THISCALL);

@@ -227,11 +227,12 @@ instead of `Track`.
   underlying C++ method has defaulted parameters and the AngelScript
   signature omits them, the C++ function still expects all parameters
   on the stack/registers and will read garbage. When wrapping such a
-  method, either expose the full parameter list in AngelScript (with
+  method, either declare the full parameter list in AngelScript (with
   AngelScript-level defaults), or wrap it in a free function that
   fills in the default and call that via `asFUNCTION /
-  asCALL_CDECL_OBJFIRST`. Existing example to revisit:
-  `wxWindow::SetSizer(wxSizer*, bool deleteOld = true)`.
+  asCALL_CDECL_OBJFIRST`. The existing wrappers around `SetSizer`,
+  `ShowFullScreen` and `wxMouseEvent::Button*` are the canonical
+  examples.
 - `wxCommandEvent::GetSelection()` and `wxCommandEvent::GetInt()` read
   the **same** internal field (`m_commandInt`). The naming is upstream
   semantics: `GetSelection` is meaningful for list-style controls,
