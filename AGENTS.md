@@ -76,6 +76,48 @@ adding the matching wx setup; see `wx/_SConscript`.
 The vendored wxWidgets is **3.3.2** (Unicode, MSVC, x64). Header layout
 expects `setup.h` at `wx/lib/mswu/wx/setup.h`.
 
+### CI: `.github/workflows/build-windows.yml`
+
+A GitHub Actions workflow runs on every push to `main` and every pull
+request. It does not need NVGT in full — it only does compile + link of
+the plugin sources to verify that the vendored wxWidgets headers / libs
+plus the bridge code stay buildable on MSVC x64.
+
+What the workflow does:
+
+1. Stages the repo into `<workspace>/plugin/wx/` so the relative
+   `../../src/nvgt_plugin.h` and `../../../src/nvgt_plugin.h` includes
+   resolve.
+2. Downloads `nvgt_plugin.h` from `samtupy/nvgt` (main branch) into
+   `<workspace>/src/nvgt_plugin.h`. Not vendored — pinning would silently
+   rot when upstream bumps `NVGT_PLUGIN_API_VERSION`.
+3. Downloads `angelscript.h` from `codecat/angelscript-mirror` into
+   `<workspace>/as_include/angelscript.h`.
+4. Sets up MSVC x64 via `ilammy/msvc-dev-cmd@v1`.
+5. Compiles the five sources with the same flags NVGT's `SConstruct`
+   uses (`/MT /EHsc /std:c++20 /J /utf-8 /Gy /GF /Zc:inline /bigobj
+   /permissive- /O2`).
+6. Links against the vendored `wxmsw33u_core.lib` + `wxbase33u.lib` and
+   uploads `nvgt_wx.dll` as an artifact.
+
+The CI deliberately does *not* link against NVGT or AngelScript libs:
+- `WXUSINGDLL` means we link against import libs, the actual code lives
+  in `wx/dll/wxmsw332u_core_vc14x_x64.dll` etc. at runtime.
+- `nvgt_plugin.h` enables `ANGELSCRIPT_DLL_MANUAL_IMPORT` for plugins,
+  so AngelScript symbols are resolved through the function-pointer
+  table populated by `prepare_plugin()` at load time, not at link time.
+  Headers are sufficient; no `.lib` is needed.
+
+When changing the bridge:
+- Touching `wx/include/`, `wx/lib/`, `wx/dll/` is supported but rare —
+  if you bump wxWidgets, also update the `WXVER_MAJOR/_MINOR/_RELEASE`
+  references in this AGENTS.md and the `wxmsw33u_core` / `wxbase33u`
+  lib names in `_SConscript` and the workflow.
+- If you add new source files under `wx/src/`, add them to **both**
+  `wx/_SConscript` (`source=[...]`) and the `$sources` list in
+  `.github/workflows/build-windows.yml`. There is no glob — a missing
+  entry will silently link a smaller DLL.
+
 ## Plugin entry point and the bridge to AngelScript
 
 The plugin exposes a single C entry point through NVGT's plugin system:

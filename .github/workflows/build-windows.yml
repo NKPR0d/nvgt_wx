@@ -1,0 +1,136 @@
+name: build-windows
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Compile + link plugin (MSVC x64)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          path: nvgt_wx_src
+
+      - name: Stage plugin into NVGT plugin layout and fetch external headers
+        shell: pwsh
+        # The plugin is normally placed at <nvgt>/plugin/wx/. The relative
+        # include paths "../../src/nvgt_plugin.h" (in wx.cpp) and
+        # "../../../src/nvgt_plugin.h" (in src/common.h) only resolve under
+        # that layout. Mirror it inside the runner workspace and drop in
+        # nvgt_plugin.h plus angelscript.h fetched from upstream.
+        # (We do NOT vendor those headers into this repo: they belong to NVGT
+        # and AngelScript, and pinning them here would silently rot.)
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          New-Item -ItemType Directory -Force -Path src, plugin\wx, as_include | Out-Null
+          Get-ChildItem -Path nvgt_wx_src\wx -Force | Move-Item -Destination plugin\wx
+
+          Invoke-WebRequest -UseBasicParsing `
+            -Uri 'https://raw.githubusercontent.com/samtupy/nvgt/main/src/nvgt_plugin.h' `
+            -OutFile 'src/nvgt_plugin.h'
+
+          # Use the codecat archived mirror (still served, frozen tree).
+          # If the mirror ever goes offline, swap to the live anjo76/angelscript
+          # repo. Keeping a single source URL keeps the workflow legible.
+          Invoke-WebRequest -UseBasicParsing `
+            -Uri 'https://raw.githubusercontent.com/codecat/angelscript-mirror/master/sdk/angelscript/include/angelscript.h' `
+            -OutFile 'as_include/angelscript.h'
+
+      - name: Configure MSVC environment (x64)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Compile and link nvgt_wx.dll
+        shell: pwsh
+        # Mirrors wx/_SConscript:
+        #   include path : wx/include + wx/lib/mswu (vendored wxWidgets 3.3.2)
+        #                + as_include (downloaded angelscript.h)
+        #   defines      : UNICODE _UNICODE WXUSINGDLL __WXMSW__
+        #   sources      : wx.cpp + src/{runtime,helpers,manager,register}.cpp
+        #   libs         : wxmsw33u_core.lib wxbase33u.lib (import libs;
+        #                  WXUSINGDLL means the actual code lives in the
+        #                  wxmsw332u_core_vc14x_x64.dll shipped under wx/dll/)
+        # Compile flags follow NVGT's SConstruct so the CI build matches what
+        # NVGT itself would produce when this plugin is built in-tree.
+        working-directory: plugin/wx
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $sources = @(
+            'wx.cpp',
+            'src/runtime.cpp',
+            'src/helpers.cpp',
+            'src/manager.cpp',
+            'src/register.cpp'
+          )
+
+          $cppArgs = @(
+            '/c',
+            '/EHsc', '/std:c++20', '/MT', '/J', '/utf-8',
+            '/Gy', '/GF', '/Zc:inline', '/bigobj', '/permissive-', '/O2',
+            '/I', 'include',
+            '/I', 'lib/mswu',
+            '/I', "$env:GITHUB_WORKSPACE/as_include",
+            '/DUNICODE', '/D_UNICODE', '/DWXUSINGDLL', '/D__WXMSW__',
+            '/D_CRT_SECURE_NO_WARNINGS'
+          )
+
+          New-Item -ItemType Directory -Force -Path obj | Out-Null
+
+          $objs = @()
+          foreach ($src in $sources) {
+            $obj = (Split-Path $src -Leaf) -replace '\.cpp$', '.obj'
+            Write-Host "==> cl $src"
+            & cl.exe @cppArgs $src "/Fo:obj\$obj"
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "cl.exe failed for $src (exit $LASTEXITCODE)"
+              exit $LASTEXITCODE
+            }
+            $objs += "obj\$obj"
+          }
+
+          # Windows system libraries. cl.exe pulls these in automatically
+          # when used as a one-shot driver, but link.exe invoked directly
+          # does not, so list them explicitly. The set mirrors what NVGT's
+          # SConstruct adds for the windows target plus the standard wxMSW
+          # link bundle (manager.cpp uses Win32 PeekMessage / DispatchMessage
+          # / TranslateMessage / IsDialogMessage / GetActiveWindow).
+          $sysLibs = @(
+            'kernel32.lib', 'user32.lib', 'gdi32.lib', 'comdlg32.lib',
+            'winspool.lib', 'shell32.lib', 'ole32.lib', 'oleaut32.lib',
+            'advapi32.lib', 'uuid.lib', 'comctl32.lib', 'winmm.lib',
+            'shlwapi.lib', 'rpcrt4.lib', 'version.lib'
+          )
+
+          Write-Host "==> link nvgt_wx.dll"
+          & link.exe `
+            /DLL `
+            /MACHINE:X64 `
+            /OUT:nvgt_wx.dll `
+            /LIBPATH:lib `
+            wxmsw33u_core.lib wxbase33u.lib `
+            @sysLibs `
+            @objs
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "link.exe failed (exit $LASTEXITCODE)"
+            exit $LASTEXITCODE
+          }
+
+          Get-Item nvgt_wx.dll | Format-List Name, Length, LastWriteTime
+
+      - name: Upload nvgt_wx.dll
+        uses: actions/upload-artifact@v4
+        with:
+          name: nvgt_wx-windows-x64
+          path: plugin/wx/nvgt_wx.dll
+          if-no-files-found: error
