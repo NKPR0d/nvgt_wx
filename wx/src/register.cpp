@@ -473,10 +473,10 @@ void register_all_types(asIScriptEngine* engine) {
     engine->RegisterObjectMethod("wx_mouse_event", "int get_y() const", asFUNCTION(wx_mouse_event_get_y), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_mouse_event", "int get_wheel_rotation() const", asMETHOD(wxMouseEvent, GetWheelRotation), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_mouse_event", "int get_wheel_delta() const", asMETHOD(wxMouseEvent, GetWheelDelta), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool dragging()", asMETHOD(wxMouseEvent, Dragging), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool moving()", asMETHOD(wxMouseEvent, Moving), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool entering()", asMETHOD(wxMouseEvent, Entering), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool leaving()", asMETHOD(wxMouseEvent, Leaving), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool dragging() const", asMETHOD(wxMouseEvent, Dragging), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool moving() const", asMETHOD(wxMouseEvent, Moving), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool entering() const", asMETHOD(wxMouseEvent, Entering), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool leaving() const", asMETHOD(wxMouseEvent, Leaving), asCALL_THISCALL);
 
     engine->RegisterObjectMethod("wx_event", "wx_command_event@ opCast()", asFUNCTION(event_to_derived<wxCommandEvent>), asCALL_CDECL_OBJLAST);
     // get_int/set_int and get_string/set_string are registered as plain
