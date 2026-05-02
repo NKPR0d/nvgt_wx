@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <map>
 #include <string>
 #include <utility>
@@ -37,6 +38,48 @@
 #define NVGT_PLUGIN_INCLUDE
 #endif
 #include "../../../src/nvgt_plugin.h"
+
+// ---------------------------------------------------------------------------
+// Value types exposed to AngelScript.
+//
+// wx_point / wx_size / wx_rect are aliased directly to wxPoint / wxSize /
+// wxRect. The underlying wxWidgets types are standard-layout aggregates of
+// int (with trivial constructors that zero-init or copy the members), so
+// AngelScript can register them as value types whose property layout
+// matches the C++ object. wxSize stores its members as `x`/`y` internally
+// but the AS-visible members are exposed as `width`/`height` to match the
+// wx documentation. This avoids allocation across the boundary and keeps
+// the member offsets stable.
+//
+// wx_colour is NOT aliased to wxColour. wxColour holds platform-specific
+// payload (e.g. an HBRUSH/HBITMAP cache on MSW), so its layout is not
+// portable across builds and cannot be safely exposed as a fixed-property
+// AS value type. Instead wx_colour is a custom POD of four uint8s, with
+// to_wx / from_wx helpers used at the boundary.
+// ---------------------------------------------------------------------------
+using wx_point = wxPoint;
+using wx_size  = wxSize;
+using wx_rect  = wxRect;
+
+struct wx_colour {
+    std::uint8_t r;
+    std::uint8_t g;
+    std::uint8_t b;
+    std::uint8_t a;
+};
+static_assert(sizeof(wx_colour) == 4, "wx_colour must be packed 4 bytes");
+
+inline wxColour to_wx(const wx_colour& c) {
+    return wxColour(c.r, c.g, c.b, c.a);
+}
+inline wx_colour from_wx(const wxColour& c) {
+    wx_colour out;
+    out.r = c.Red();
+    out.g = c.Green();
+    out.b = c.Blue();
+    out.a = c.Alpha();
+    return out;
+}
 
 // ---------------------------------------------------------------------------
 // Script context pool (defined in runtime.cpp).
@@ -148,20 +191,67 @@ void wx_command_event_set_extra_long(wxCommandEvent* self, int value);
 
 std::string wx_window_get_tool_tip(wxWindow* self);
 void wx_window_set_tool_tip(wxWindow* self, const std::string& text);
-void wx_window_get_background_colour(wxWindow* self, int& r, int& g, int& b);
-void wx_window_set_background_colour(wxWindow* self, int r, int g, int b);
-void wx_window_get_foreground_colour(wxWindow* self, int& r, int& g, int& b);
-void wx_window_set_foreground_colour(wxWindow* self, int r, int g, int b);
-void wx_window_get_position(wxWindow* self, int& x, int& y);
-void wx_window_set_position(wxWindow* self, int x, int y);
-void wx_window_get_size(wxWindow* self, int& out_w, int& out_h);
-void wx_window_set_size(wxWindow* self, int w, int h);
+
+// Geometry / colour adapters. All take and return value types and are
+// registered with the AngelScript "property" keyword so scripts can read
+// `win.size`, write `win.position = wx_point(x, y)`, etc.
+wx_colour wx_window_get_background_colour(wxWindow* self);
+void wx_window_set_background_colour(wxWindow* self, const wx_colour& c);
+wx_colour wx_window_get_foreground_colour(wxWindow* self);
+void wx_window_set_foreground_colour(wxWindow* self, const wx_colour& c);
+wx_point wx_window_get_position(wxWindow* self);
+void wx_window_set_position(wxWindow* self, const wx_point& p);
+wx_size wx_window_get_size(wxWindow* self);
+void wx_window_set_size(wxWindow* self, const wx_size& s);
+wx_size wx_window_get_client_size(wxWindow* self);
+void wx_window_set_client_size(wxWindow* self, const wx_size& s);
+wx_size wx_window_get_min_size(wxWindow* self);
+void wx_window_set_min_size(wxWindow* self, const wx_size& s);
+wx_size wx_window_get_max_size(wxWindow* self);
+void wx_window_set_max_size(wxWindow* self, const wx_size& s);
+wx_size wx_window_get_min_client_size(wxWindow* self);
+void wx_window_set_min_client_size(wxWindow* self, const wx_size& s);
+wx_size wx_window_get_max_client_size(wxWindow* self);
+void wx_window_set_max_client_size(wxWindow* self, const wx_size& s);
+wx_size wx_window_get_virtual_size(wxWindow* self);
+void wx_window_set_virtual_size(wxWindow* self, const wx_size& s);
+wx_size wx_window_get_window_border_size(wxWindow* self);
+wx_size wx_window_get_dpi(wxWindow* self);
+wx_size wx_window_get_best_size(wxWindow* self);
+wx_point wx_window_get_screen_position(wxWindow* self);
+wx_rect wx_window_get_rect(wxWindow* self);
+wx_rect wx_window_get_screen_rect(wxWindow* self);
+wx_rect wx_window_get_client_rect(wxWindow* self);
+wx_point wx_window_client_to_screen(wxWindow* self, const wx_point& p);
+wx_point wx_window_screen_to_client(wxWindow* self, const wx_point& p);
+void wx_window_move(wxWindow* self, const wx_point& p);
+void wx_window_set_size_rect(wxWindow* self, const wx_rect& r);
+void wx_window_set_size_hints(wxWindow* self, const wx_size& min_size, const wx_size& max_size);
+void wx_window_set_initial_size(wxWindow* self, const wx_size& s);
+wx_size wx_window_get_text_extent(wxWindow* self, const std::string& text);
+
+// String-property adapters.
+std::string wx_window_get_label(wxWindow* self);
+void wx_window_set_label(wxWindow* self, const std::string& label);
+std::string wx_window_get_name(wxWindow* self);
+void wx_window_set_name(wxWindow* self, const std::string& name);
+std::string wx_window_get_help_text(wxWindow* self);
+void wx_window_set_help_text(wxWindow* self, const std::string& text);
+
+// Sizer + paint adapters.
 wxSizer* wx_window_get_sizer(wxWindow* self);
 void wx_window_set_sizer(wxWindow* self, wxSizer* sizer);
 void wx_window_refresh(wxWindow* self);
 
+// wxWindow::ScrollWindow takes a `const wxRect* = nullptr` last parameter
+// that is dereferenced unconditionally on MSW; pass nullptr explicitly.
+void wx_window_scroll_window(wxWindow* self, int dx, int dy);
+
 std::string wx_control_get_label(wxControl* self);
 void wx_control_set_label(wxControl* self, const std::string& label);
+std::string wx_control_get_label_text(wxControl* self);
+void wx_control_set_label_text(wxControl* self, const std::string& text);
+bool wx_control_set_label_markup(wxControl* self, const std::string& markup);
 
 std::string wx_tlw_get_title(wxTopLevelWindow* self);
 void wx_tlw_set_title(wxTopLevelWindow* self, const std::string& title);
@@ -169,33 +259,78 @@ bool wx_tlw_show_full_screen(wxTopLevelWindow* self, bool show);
 
 void wx_sizer_add_window(wxSizer* self, wxWindow* window, int proportion, int flag, int border);
 void wx_sizer_add_sizer(wxSizer* self, wxSizer* sizer, int proportion, int flag, int border);
+wxSizerItem* wx_sizer_add_spacer(wxSizer* self, int size);
+wxSizerItem* wx_sizer_add_stretch_spacer(wxSizer* self, int prop);
 bool wx_sizer_show_window(wxSizer* self, wxWindow* win, bool show, bool recursive);
 bool wx_sizer_show_sizer(wxSizer* self, wxSizer* s, bool show, bool recursive);
+bool wx_sizer_show_index(wxSizer* self, int index, bool show);
 bool wx_sizer_hide_window(wxSizer* self, wxWindow* win, bool recursive);
 bool wx_sizer_hide_sizer(wxSizer* self, wxSizer* s, bool recursive);
+bool wx_sizer_hide_index(wxSizer* self, int index);
+bool wx_sizer_is_shown_window(wxSizer* self, wxWindow* win);
+bool wx_sizer_is_shown_sizer(wxSizer* self, wxSizer* s);
+bool wx_sizer_is_shown_index(wxSizer* self, int index);
+void wx_sizer_show_all(wxSizer* self, bool show);
+void wx_sizer_show_items(wxSizer* self, bool show);
+bool wx_sizer_are_any_items_shown(wxSizer* self);
 bool wx_sizer_replace_window(wxSizer* self, wxWindow* oldwin, wxWindow* newwin, bool recursive);
 bool wx_sizer_replace_sizer(wxSizer* self, wxSizer* oldsizer, wxSizer* newsizer, bool recursive);
 bool wx_sizer_detach_index(wxSizer* self, int index);
 bool wx_sizer_detach_window(wxSizer* self, wxWindow* win);
 bool wx_sizer_detach_sizer(wxSizer* self, wxSizer* s);
+bool wx_sizer_remove_index(wxSizer* self, int index);
+bool wx_sizer_remove_sizer(wxSizer* self, wxSizer* s);
+void wx_sizer_clear(wxSizer* self, bool delete_windows);
+void wx_sizer_delete_windows(wxSizer* self);
 void wx_sizer_insert_window(wxSizer* self, int index, wxWindow* win, int proportion, int flag, int border);
 void wx_sizer_insert_sizer(wxSizer* self, int index, wxSizer* s, int proportion, int flag, int border);
+wxSizerItem* wx_sizer_insert_spacer(wxSizer* self, int index, int size);
+wxSizerItem* wx_sizer_insert_stretch_spacer(wxSizer* self, int index, int prop);
 void wx_sizer_prepend_window(wxSizer* self, wxWindow* win, int proportion, int flag, int border);
 void wx_sizer_prepend_sizer(wxSizer* self, wxSizer* s, int proportion, int flag, int border);
+wxSizerItem* wx_sizer_prepend_spacer(wxSizer* self, int size);
+wxSizerItem* wx_sizer_prepend_stretch_spacer(wxSizer* self, int prop);
 wxSizerItem* wx_sizer_get_item_window(wxSizer* self, wxWindow* win);
 wxSizerItem* wx_sizer_get_item_sz(wxSizer* self, wxSizer* s);
 wxSizerItem* wx_sizer_get_item_index(wxSizer* self, int index);
 int wx_sizer_find_window(wxSizer* self, wxWindow* win);
 int wx_sizer_find_sizer(wxSizer* self, wxSizer* s);
-void wx_sizer_get_position(wxSizer* self, int& x, int& y);
-void wx_sizer_get_size(wxSizer* self, int& w, int& h);
+wx_point wx_sizer_get_position(wxSizer* self);
+wx_size wx_sizer_get_size(wxSizer* self);
+wx_size wx_sizer_get_min_size(wxSizer* self);
+void wx_sizer_set_min_size(wxSizer* self, const wx_size& s);
+bool wx_sizer_set_item_min_size_window(wxSizer* self, wxWindow* win, const wx_size& s);
+bool wx_sizer_set_item_min_size_sizer(wxSizer* self, wxSizer* sz, const wx_size& s);
+bool wx_sizer_set_item_min_size_index(wxSizer* self, int index, const wx_size& s);
+wx_size wx_sizer_compute_fitting_client_size(wxSizer* self, wxWindow* win);
+wx_size wx_sizer_compute_fitting_window_size(wxSizer* self, wxWindow* win);
+wx_size wx_sizer_fit(wxSizer* self, wxWindow* win);
+void wx_sizer_fit_inside(wxSizer* self, wxWindow* win);
+void wx_sizer_set_size_hints(wxSizer* self, wxWindow* win);
 
 wxWindow* wx_sizer_item_get_window(wxSizerItem* self);
 wxSizer* wx_sizer_item_get_sizer(wxSizerItem* self);
+wx_size wx_sizer_item_get_size(wxSizerItem* self);
+wx_size wx_sizer_item_calc_min(wxSizerItem* self);
+wx_size wx_sizer_item_get_min_size(wxSizerItem* self);
+wx_size wx_sizer_item_get_min_size_with_border(wxSizerItem* self);
+wx_size wx_sizer_item_get_max_size(wxSizerItem* self);
+wx_size wx_sizer_item_get_max_size_with_border(wxSizerItem* self);
+void wx_sizer_item_set_min_size(wxSizerItem* self, const wx_size& s);
+wx_rect wx_sizer_item_get_rect(wxSizerItem* self);
+wx_point wx_sizer_item_get_position(wxSizerItem* self);
+wx_size wx_sizer_item_get_spacer(wxSizerItem* self);
+void wx_sizer_item_set_init_size(wxSizerItem* self, const wx_size& s);
+void wx_sizer_item_set_ratio_size(wxSizerItem* self, const wx_size& s);
+void wx_sizer_item_set_ratio_float(wxSizerItem* self, float ratio);
+void wx_sizer_item_detach_window(wxSizerItem* self);
+void wx_sizer_item_detach_sizer(wxSizerItem* self);
+void wx_sizer_item_delete_windows(wxSizerItem* self);
 
 wxTextEntry* GetEntry(wxWindow* win);
 std::string wx_text_entry_get_value(wxWindow* self);
 void wx_text_entry_set_value(wxWindow* self, const std::string& value);
+void wx_text_entry_change_value(wxWindow* self, const std::string& value);
 void wx_text_entry_write_text(wxWindow* self, const std::string& text);
 void wx_text_entry_append_text(wxWindow* self, const std::string& text);
 void wx_text_entry_clear(wxWindow* self);
@@ -220,7 +355,17 @@ bool wx_text_entry_is_empty(wxWindow* self);
 void wx_text_entry_replace(wxWindow* self, int from, int to, const std::string& value);
 void wx_text_entry_select_all(wxWindow* self);
 void wx_text_entry_select_none(wxWindow* self);
+bool wx_text_entry_has_selection(wxWindow* self);
 void wx_text_entry_set_max_length(wxWindow* self, int len);
+int wx_text_entry_get_insertion_point(wxWindow* self);
+void wx_text_entry_set_insertion_point(wxWindow* self, int pos);
+void wx_text_entry_set_insertion_point_end(wxWindow* self);
+int wx_text_entry_get_last_position(wxWindow* self);
+void wx_text_entry_force_upper(wxWindow* self);
+std::string wx_text_entry_get_hint(wxWindow* self);
+bool wx_text_entry_set_hint(wxWindow* self, const std::string& hint);
+bool wx_text_entry_auto_complete_file_names(wxWindow* self);
+bool wx_text_entry_auto_complete_directories(wxWindow* self);
 
 wxRadioButton* wx_radio_button_get_first_in_group(wxRadioButton* self);
 wxRadioButton* wx_radio_button_get_last_in_group(wxRadioButton* self);

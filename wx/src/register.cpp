@@ -13,6 +13,119 @@
 namespace {
 
 // ---------------------------------------------------------------------------
+// Value-type constructors. AngelScript needs a CONSTRUCT behaviour for any
+// non-default constructor we expose. The default constructors are also
+// registered explicitly so AS-side `wx_point p;` resolves consistently
+// across compilers (asGetTypeTraits would mark wxPoint/wxSize/wxRect as
+// asOBJ_APP_CLASS_C, which means construct/destruct must be registered).
+// ---------------------------------------------------------------------------
+void wx_point_default_ctor(void* mem) { new (mem) wxPoint(); }
+void wx_point_xy_ctor(int x, int y, void* mem) { new (mem) wxPoint(x, y); }
+void wx_point_copy_ctor(const wxPoint& other, void* mem) { new (mem) wxPoint(other); }
+void wx_point_dtor(void* mem) { static_cast<wxPoint*>(mem)->~wxPoint(); }
+
+void wx_size_default_ctor(void* mem) { new (mem) wxSize(); }
+void wx_size_wh_ctor(int w, int h, void* mem) { new (mem) wxSize(w, h); }
+void wx_size_copy_ctor(const wxSize& other, void* mem) { new (mem) wxSize(other); }
+void wx_size_dtor(void* mem) { static_cast<wxSize*>(mem)->~wxSize(); }
+
+void wx_rect_default_ctor(void* mem) { new (mem) wxRect(); }
+void wx_rect_xywh_ctor(int x, int y, int w, int h, void* mem) { new (mem) wxRect(x, y, w, h); }
+void wx_rect_copy_ctor(const wxRect& other, void* mem) { new (mem) wxRect(other); }
+void wx_rect_dtor(void* mem) { static_cast<wxRect*>(mem)->~wxRect(); }
+
+void wx_colour_default_ctor(void* mem) {
+    auto* p = static_cast<wx_colour*>(mem);
+    p->r = 0; p->g = 0; p->b = 0; p->a = 255;
+}
+void wx_colour_rgb_ctor(unsigned char r, unsigned char g, unsigned char b, void* mem) {
+    auto* p = static_cast<wx_colour*>(mem);
+    p->r = r; p->g = g; p->b = b; p->a = 255;
+}
+void wx_colour_rgba_ctor(unsigned char r, unsigned char g, unsigned char b, unsigned char a, void* mem) {
+    auto* p = static_cast<wx_colour*>(mem);
+    p->r = r; p->g = g; p->b = b; p->a = a;
+}
+void wx_colour_copy_ctor(const wx_colour& other, void* mem) {
+    new (mem) wx_colour(other);
+}
+void wx_colour_dtor(void* mem) { static_cast<wx_colour*>(mem)->~wx_colour(); }
+
+void register_value_types(asIScriptEngine* engine) {
+    // wx_point: constructor is the only non-trivial special member.
+    engine->RegisterObjectType("wx_point", sizeof(wxPoint),
+        asOBJ_VALUE | asOBJ_APP_CLASS_CK | asOBJ_APP_CLASS_ALLINTS);
+    engine->RegisterObjectBehaviour("wx_point", asBEHAVE_CONSTRUCT, "void f()",
+        asFUNCTION(wx_point_default_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_point", asBEHAVE_CONSTRUCT, "void f(int x, int y)",
+        asFUNCTION(wx_point_xy_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_point", asBEHAVE_CONSTRUCT, "void f(const wx_point &in)",
+        asFUNCTION(wx_point_copy_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_point", asBEHAVE_DESTRUCT, "void f()",
+        asFUNCTION(wx_point_dtor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectMethod("wx_point", "wx_point &opAssign(const wx_point &in)",
+        asMETHODPR(wxPoint, operator=, (const wxPoint&), wxPoint&), asCALL_THISCALL);
+    engine->RegisterObjectProperty("wx_point", "int x", offsetof(wxPoint, x));
+    engine->RegisterObjectProperty("wx_point", "int y", offsetof(wxPoint, y));
+
+    // wx_size: AS-visible properties are width/height while the underlying
+    // wxSize stores them as x/y. Map AS names to the C++ offsets so the
+    // value type is properties-by-position correct.
+    engine->RegisterObjectType("wx_size", sizeof(wxSize),
+        asOBJ_VALUE | asOBJ_APP_CLASS_CK | asOBJ_APP_CLASS_ALLINTS);
+    engine->RegisterObjectBehaviour("wx_size", asBEHAVE_CONSTRUCT, "void f()",
+        asFUNCTION(wx_size_default_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_size", asBEHAVE_CONSTRUCT, "void f(int width, int height)",
+        asFUNCTION(wx_size_wh_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_size", asBEHAVE_CONSTRUCT, "void f(const wx_size &in)",
+        asFUNCTION(wx_size_copy_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_size", asBEHAVE_DESTRUCT, "void f()",
+        asFUNCTION(wx_size_dtor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectMethod("wx_size", "wx_size &opAssign(const wx_size &in)",
+        asMETHODPR(wxSize, operator=, (const wxSize&), wxSize&), asCALL_THISCALL);
+    // wxSize stores members as x/y internally, but the AS-visible API uses
+    // width/height to match the wx documentation.
+    engine->RegisterObjectProperty("wx_size", "int width", offsetof(wxSize, x));
+    engine->RegisterObjectProperty("wx_size", "int height", offsetof(wxSize, y));
+
+    engine->RegisterObjectType("wx_rect", sizeof(wxRect),
+        asOBJ_VALUE | asOBJ_APP_CLASS_CK | asOBJ_APP_CLASS_ALLINTS);
+    engine->RegisterObjectBehaviour("wx_rect", asBEHAVE_CONSTRUCT, "void f()",
+        asFUNCTION(wx_rect_default_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_rect", asBEHAVE_CONSTRUCT, "void f(int x, int y, int width, int height)",
+        asFUNCTION(wx_rect_xywh_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_rect", asBEHAVE_CONSTRUCT, "void f(const wx_rect &in)",
+        asFUNCTION(wx_rect_copy_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_rect", asBEHAVE_DESTRUCT, "void f()",
+        asFUNCTION(wx_rect_dtor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectMethod("wx_rect", "wx_rect &opAssign(const wx_rect &in)",
+        asMETHODPR(wxRect, operator=, (const wxRect&), wxRect&), asCALL_THISCALL);
+    engine->RegisterObjectProperty("wx_rect", "int x", offsetof(wxRect, x));
+    engine->RegisterObjectProperty("wx_rect", "int y", offsetof(wxRect, y));
+    engine->RegisterObjectProperty("wx_rect", "int width", offsetof(wxRect, width));
+    engine->RegisterObjectProperty("wx_rect", "int height", offsetof(wxRect, height));
+
+    // wx_colour: custom POD; default alpha is 255 in the no-alpha ctor to
+    // match wx defaults.
+    engine->RegisterObjectType("wx_colour", sizeof(wx_colour),
+        asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_CK | asOBJ_APP_CLASS_ALLINTS);
+    engine->RegisterObjectBehaviour("wx_colour", asBEHAVE_CONSTRUCT, "void f()",
+        asFUNCTION(wx_colour_default_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_colour", asBEHAVE_CONSTRUCT, "void f(uint8 r, uint8 g, uint8 b)",
+        asFUNCTION(wx_colour_rgb_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_colour", asBEHAVE_CONSTRUCT, "void f(uint8 r, uint8 g, uint8 b, uint8 a)",
+        asFUNCTION(wx_colour_rgba_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_colour", asBEHAVE_CONSTRUCT, "void f(const wx_colour &in)",
+        asFUNCTION(wx_colour_copy_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_colour", asBEHAVE_DESTRUCT, "void f()",
+        asFUNCTION(wx_colour_dtor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectProperty("wx_colour", "uint8 r", offsetof(wx_colour, r));
+    engine->RegisterObjectProperty("wx_colour", "uint8 g", offsetof(wx_colour, g));
+    engine->RegisterObjectProperty("wx_colour", "uint8 b", offsetof(wx_colour, b));
+    engine->RegisterObjectProperty("wx_colour", "uint8 a", offsetof(wx_colour, a));
+}
+
+// ---------------------------------------------------------------------------
 // REG_BASE_REF — AddRef/Release behaviours, applied to every wx ref type.
 // ---------------------------------------------------------------------------
 #define REG_BASE_REF(name) \
