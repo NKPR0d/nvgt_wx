@@ -99,6 +99,19 @@ jobs:
             $objs += "obj\$obj"
           }
 
+          # Windows system libraries. cl.exe pulls these in automatically
+          # when used as a one-shot driver, but link.exe invoked directly
+          # does not, so list them explicitly. The set mirrors what NVGT's
+          # SConstruct adds for the windows target plus the standard wxMSW
+          # link bundle (manager.cpp uses Win32 PeekMessage / DispatchMessage
+          # / TranslateMessage / IsDialogMessage / GetActiveWindow).
+          $sysLibs = @(
+            'kernel32.lib', 'user32.lib', 'gdi32.lib', 'comdlg32.lib',
+            'winspool.lib', 'shell32.lib', 'ole32.lib', 'oleaut32.lib',
+            'advapi32.lib', 'uuid.lib', 'comctl32.lib', 'winmm.lib',
+            'shlwapi.lib', 'rpcrt4.lib', 'version.lib'
+          )
+
           Write-Host "==> link nvgt_wx.dll"
           & link.exe `
             /DLL `
@@ -106,6 +119,7 @@ jobs:
             /OUT:nvgt_wx.dll `
             /LIBPATH:lib `
             wxmsw33u_core.lib wxbase33u.lib `
+            @sysLibs `
             @objs
           if ($LASTEXITCODE -ne 0) {
             Write-Error "link.exe failed (exit $LASTEXITCODE)"
