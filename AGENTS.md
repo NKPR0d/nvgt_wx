@@ -267,8 +267,14 @@ instead of `Track`.
   AngelScript-level defaults), or wrap it in a free function that
   fills in the default and call that via `asFUNCTION /
   asCALL_CDECL_OBJFIRST`. The existing wrappers around `SetSizer`,
-  `ShowFullScreen` and `wxMouseEvent::Button*` are the canonical
-  examples.
+  `ShowFullScreen`, `wxMouseEvent::Button*` and `Refresh` are the
+  canonical examples. **Pointer defaults are especially dangerous**:
+  wxWidgets methods like `wxWindow::Refresh(bool, const wxRect*)` will
+  dereference the pointer parameter on the MSW path, so a garbage
+  pointer is not just an unused-byte read — it crashes the process.
+  When adding a new registration, double-check the C++ signature for
+  defaulted parameters (including ones documented only in the wx
+  reference, not the header).
 - `wxCommandEvent::GetSelection()` and `wxCommandEvent::GetInt()` read
   the **same** internal field (`m_commandInt`). The naming is upstream
   semantics: `GetSelection` is meaningful for list-style controls,

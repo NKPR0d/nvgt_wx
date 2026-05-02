@@ -141,6 +141,7 @@ void wx_window_get_size(wxWindow* self, int& out_w, int& out_h);
 void wx_window_set_size(wxWindow* self, int w, int h);
 wxSizer* wx_window_get_sizer(wxWindow* self);
 void wx_window_set_sizer(wxWindow* self, wxSizer* sizer);
+void wx_window_refresh(wxWindow* self);
 
 std::string wx_control_get_label(wxControl* self);
 void wx_control_set_label(wxControl* self, const std::string& label);

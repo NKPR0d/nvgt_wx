@@ -141,6 +141,17 @@ void wx_window_set_sizer(wxWindow* self, wxSizer* sizer) {
     if (self) self->SetSizer(sizer, false);
 }
 
+// wxWindow::Refresh has signature
+//   Refresh(bool eraseBackground = true, const wxRect* rect = nullptr).
+// asMETHOD does not propagate the C++ defaults: when AngelScript calls a
+// zero-arg refresh() the C++ side still reads `rect` from whatever happens
+// to be in the parameter register, and on MSW the implementation
+// dereferences it unconditionally. Wrap with explicit defaults so the
+// AS-side call passes nullptr through.
+void wx_window_refresh(wxWindow* self) {
+    if (self) self->Refresh(true, nullptr);
+}
+
 // ---------------------------------------------------------------------------
 // wxControl.
 // ---------------------------------------------------------------------------
