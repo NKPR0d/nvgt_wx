@@ -271,7 +271,7 @@ void wx_window_set_size(wxWindow* self, int w, int h) {
 }
 
 wxSizer* wx_window_get_sizer(wxWindow* self) {
-    wxSizer* s = self->GetSizer();
+    wxSizer* s = self ? self->GetSizer() : nullptr;
     if (s) AddRef(s);
     return s;
 }
