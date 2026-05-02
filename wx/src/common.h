@@ -23,6 +23,19 @@
 #include <wx/wx.h>
 #include <wx/evtloop.h>
 
+// nvgt_plugin.h emits *definitions* of plugin_version() and the
+// asGetLibraryVersion / asAcquireExclusiveLock / nvgt_wait / ... function
+// pointer table whenever it is included without NVGT_PLUGIN_INCLUDE
+// defined. With the plugin split across multiple translation units those
+// definitions would land in every TU and the linker would reject them as
+// LNK2005 duplicates. Force the extern-declarations form here. Exactly
+// one TU (the entry point, wx.cpp) is responsible for emitting the
+// definitions; it does so by including nvgt_plugin.h *before* common.h
+// without the gate. The #pragma once guard inside nvgt_plugin.h then
+// makes this re-include a no-op and the definitions stay in wx.cpp.
+#ifndef NVGT_PLUGIN_INCLUDE
+#define NVGT_PLUGIN_INCLUDE
+#endif
 #include "../../../src/nvgt_plugin.h"
 
 // ---------------------------------------------------------------------------

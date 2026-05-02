@@ -96,6 +96,33 @@ NVGT's plugin ABI lives in
 The macros `plugin_main`, `prepare_plugin`, `static_plugin(...)` are
 defined there.
 
+### Including `nvgt_plugin.h` from a multi-file plugin
+
+`nvgt_plugin.h` *defines* (not just declares) the
+`asGetLibraryVersion / asAcquireExclusiveLock / nvgt_wait / ...`
+function pointer table and `plugin_version()` whenever it is included
+without `NVGT_PLUGIN_INCLUDE` defined. With the plugin split across
+`wx.cpp + src/*.cpp` that would emit those symbols in every TU and the
+linker rejects them as `LNK2005 already defined`. The convention in
+this repo is:
+
+- `wx.cpp` (the entry-point TU) includes `../../src/nvgt_plugin.h`
+  **first**, *before* `src/common.h`, with the gate **not** set. This
+  is the one TU that owns the function-pointer storage and
+  `plugin_version()`.
+- `src/common.h` defines `NVGT_PLUGIN_INCLUDE` before its own
+  `#include "../../../src/nvgt_plugin.h"`. Every other TU only ever
+  reaches `nvgt_plugin.h` through `common.h`, so they all see the
+  extern-declarations form.
+- The `#pragma once` inside `nvgt_plugin.h` makes the second include in
+  `wx.cpp` (via `common.h`) a no-op, so the two paths do not conflict.
+
+If you reorder the includes in `wx.cpp` (common.h first), `wx.cpp` will
+also see only `extern` declarations and the linker will fail with
+`unresolved external symbol asGetLibraryVersion` (and friends).
+If you forget the gate in `common.h`, the linker will fail with
+`LNK2005 already defined in wx.obj` for the same set of symbols.
+
 ## Architecture notes
 
 ### `WxManager` (AngelScript value type `wx`)
