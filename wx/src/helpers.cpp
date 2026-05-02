@@ -71,6 +71,34 @@ void wx_command_event_set_string(wxCommandEvent* self, const std::string& s) {
     if (self) self->SetString(wxString::FromUTF8(s.c_str()));
 }
 
+// GetInt/SetInt/GetExtraLong/SetExtraLong are inherited by wxCommandEvent
+// from wxEventBasicPayloadMixin via multiple inheritance. asMETHOD takes
+// &wxCommandEvent::GetInt which yields a pointer-to-member-of-base, and
+// MSVC then refuses to convert that to a pointer-to-member-of-wxCommandEvent
+// because MI member-pointers have a different representation. Wrap as
+// free functions to sidestep the conversion entirely.
+//
+// GetExtraLong/SetExtraLong upstream uses C++ `long`. On MSVC x64 long is
+// 32-bit so int matches the ABI; on Linux x86_64 long is 64-bit and the
+// raw asMETHOD binding would silently truncate. The wrappers cast through
+// the native wx type so adding a non-Windows build later just needs to
+// flip the AS signature to int64 (no other code change).
+int wx_command_event_get_int(wxCommandEvent* self) {
+    return self ? self->GetInt() : 0;
+}
+
+void wx_command_event_set_int(wxCommandEvent* self, int value) {
+    if (self) self->SetInt(value);
+}
+
+int wx_command_event_get_extra_long(wxCommandEvent* self) {
+    return self ? static_cast<int>(self->GetExtraLong()) : 0;
+}
+
+void wx_command_event_set_extra_long(wxCommandEvent* self, int value) {
+    if (self) self->SetExtraLong(static_cast<long>(value));
+}
+
 // ---------------------------------------------------------------------------
 // wxWindow.
 // ---------------------------------------------------------------------------

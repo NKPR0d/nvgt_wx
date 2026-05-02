@@ -484,15 +484,15 @@ void register_all_types(asIScriptEngine* engine) {
     // 'int' (a reserved AngelScript keyword) and 'string' (a registered
     // type name), neither of which is usable from script as obj.int /
     // obj.string.
-    engine->RegisterObjectMethod("wx_command_event", "int get_int() const", asMETHOD(wxCommandEvent, GetInt), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_command_event", "void set_int(int value)", asMETHOD(wxCommandEvent, SetInt), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_command_event", "int get_int() const", asFUNCTION(wx_command_event_get_int), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_command_event", "void set_int(int value)", asFUNCTION(wx_command_event_set_int), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_command_event", "int get_selection() const property", asMETHOD(wxCommandEvent, GetSelection), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_command_event", "string get_string() const", asFUNCTION(wx_command_event_get_string), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_command_event", "void set_string(const string &in value)", asFUNCTION(wx_command_event_set_string), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_command_event", "bool is_checked() const", asMETHOD(wxCommandEvent, IsChecked), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_command_event", "bool is_selection() const", asMETHOD(wxCommandEvent, IsSelection), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_command_event", "int get_extra_long() const property", asMETHOD(wxCommandEvent, GetExtraLong), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_command_event", "void set_extra_long(int value) property", asMETHOD(wxCommandEvent, SetExtraLong), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_command_event", "int get_extra_long() const property", asFUNCTION(wx_command_event_get_extra_long), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_command_event", "void set_extra_long(int value) property", asFUNCTION(wx_command_event_set_extra_long), asCALL_CDECL_OBJFIRST);
 
     engine->RegisterObjectMethod("wx_sizer_item", "wx_window@ get_window() const property", asFUNCTION(wx_sizer_item_get_window), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_sizer_item", "wx_sizer@ get_sizer() const property", asFUNCTION(wx_sizer_item_get_sizer), asCALL_CDECL_OBJFIRST);
