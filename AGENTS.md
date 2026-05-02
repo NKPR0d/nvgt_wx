@@ -163,6 +163,11 @@ instead of `Track`.
   (the qualifier only affects AngelScript-side type checking and is
   required for symmetric `const`-ness across getter/setter pairs).
   Setters never carry `const`.
+  Read-only properties (a `get_*` without a matching `set_*`) are
+  acceptable when the upstream setter has no script-level use case —
+  e.g. `wx_window.id` is registered as `get_id() const property` only,
+  because `wxWindow::SetId()` after construction breaks any pre-existing
+  `Bind`/menu-item dispatch keyed on the original id.
 - **Property names are derived by stripping `get_`/`set_`.** That
   derived name must be a valid AngelScript identifier and must not
   collide with the type/keyword namespace. In practice:
