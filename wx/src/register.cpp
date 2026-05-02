@@ -219,12 +219,12 @@ void register_value_types(asIScriptEngine* engine) {
     engine->RegisterObjectMethod(name, "void set_size_hints(const wx_size &in min_size, const wx_size &in max_size)", asFUNCTION(wx_window_set_size_hints), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_initial_size(const wx_size &in size)", asFUNCTION(wx_window_set_initial_size), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "wx_size get_text_extent(const string &in text) const", asFUNCTION(wx_window_get_text_extent), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "int get_window_style() const property", asMETHOD(wxWindow, GetWindowStyleFlag), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "void set_window_style(int style) property", asMETHOD(wxWindow, SetWindowStyleFlag), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "int get_window_style() const property", asFUNCTION(wx_window_get_window_style), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_window_style(int style) property", asFUNCTION(wx_window_set_window_style), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool has_flag(int flag) const", asMETHOD(wxWindow, HasFlag), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void toggle_window_style(int flag)", asMETHOD(wxWindow, ToggleWindowStyle), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "int get_extra_style() const property", asMETHOD(wxWindow, GetExtraStyle), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "void set_extra_style(int style) property", asMETHOD(wxWindow, SetExtraStyle), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "int get_extra_style() const property", asFUNCTION(wx_window_get_extra_style), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_extra_style(int style) property", asFUNCTION(wx_window_set_extra_style), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool is_shown() const", asMETHOD(wxWindow, IsShown), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "bool is_enabled() const", asMETHOD(wxWindow, IsEnabled), asCALL_THISCALL);
 
@@ -363,7 +363,7 @@ void register_value_types(asIScriptEngine* engine) {
     engine->RegisterObjectMethod(name, "int get_last_position() const", asFUNCTION(wx_text_entry_get_last_position), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void force_upper()", asFUNCTION(wx_text_entry_force_upper), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "string get_hint() const property", asFUNCTION(wx_text_entry_get_hint), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "bool set_hint(const string &in hint) property", asFUNCTION(wx_text_entry_set_hint), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_hint(const string &in hint) property", asFUNCTION(wx_text_entry_set_hint), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool auto_complete_file_names()", asFUNCTION(wx_text_entry_auto_complete_file_names), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool auto_complete_directories()", asFUNCTION(wx_text_entry_auto_complete_directories), asCALL_CDECL_OBJFIRST);
 

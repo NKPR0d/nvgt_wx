@@ -298,6 +298,19 @@ handler. `AddRef`/`Release` come from `REG_BASE_REF`.
 For non-window types (sizers, sizer items) call `AddRef(ptr)` directly
 instead of `Track`.
 
+When a wrapper returns a wxWindow that the bridge **may or may not have
+created** — i.e. anything obtained via `wxWindow::GetParent`,
+`GetGrandParent`, `GetChildren()` walks, sibling navigation on
+`wxRadioButton`, etc. — use `EnsureTracked(ptr)` instead of bare
+`AddRef(ptr)`. `EnsureTracked` binds the `wxEVT_DESTROY` handler the
+**first** time the bridge sees a pointer, then on every subsequent call
+just increments the refcount. Without that hook, an untracked window
+would leave a stale entry in `g_ref_counts` after wxWidgets destroys
+it, and the eventual `Release()` path could call `Destroy()` on a
+top-level window the bridge does not own, taking down the entire
+parent's child chain along with it. `EnsureTracked` is in
+`common.h` next to `Track`.
+
 ## Naming and code conventions
 
 - AngelScript-exposed names use **`snake_case`** (`set_title`,
@@ -405,13 +418,43 @@ instead of `Track`.
   `GetInt` for general payload. Both wrappers are exposed because
   upstream exposes both, but writers should pick the one that matches
   the control they are reading from.
-- `wxCommandEvent::GetExtraLong()` / `SetExtraLong()` use C++ `long`,
-  which is 32-bit on Windows MSVC x64 (the current build target) but
-  64-bit on Linux x86_64. The AngelScript signature is registered as
-  `int` and the wrapper does an explicit `static_cast<long>` /
-  `static_cast<int>`. Any future Linux build needs to flip the AS
-  signature to `int64` (the wrapper already does the cast). Do not
-  bind `asMETHOD(wxCommandEvent, SetExtraLong)` directly.
+- **C++ `long` parameters and return types must be wrapped, never
+  bound through `asMETHOD` directly.** `long` is 32-bit on Windows
+  MSVC x64 (the current build target, an LLP64 platform) but 64-bit
+  on every LP64 Unix (Linux x86_64, macOS, *BSD, common aarch64
+  toolchains). Binding the wxWidgets accessor through `asMETHOD`
+  with an AS-side `int` happens to work on Windows because the two
+  widths coincide; it silently truncates setters and reads garbage
+  from the upper word of getters on every other platform. Always
+  wrap with a free function that does an explicit `static_cast<long>`
+  on the way in and `static_cast<int>` on the way out, and register
+  via `asFUNCTION / asCALL_CDECL_OBJFIRST`. Affected accessors
+  currently exposed: `wxCommandEvent::GetExtraLong()` /
+  `SetExtraLong()`, `wxWindow::GetWindowStyleFlag()` /
+  `SetWindowStyleFlag()`, `wxWindow::GetExtraStyle()` /
+  `SetExtraStyle()`. Any future binding of a wx accessor whose
+  C++ signature uses `long` (e.g. style-flag siblings, font weight
+  enums in older wx, …) belongs in the same family. Once a 64-bit
+  Unix port lands, switch the AS-side signature to `int64`; the
+  wrappers already do the cast.
+- **AngelScript property setters must return `void`.** Per the
+  AngelScript [property accessor docs](https://www.angelcode.com/angelscript/sdk/docs/manual/doc_script_class_prop.html),
+  the setter for a `property` accessor takes the value and returns
+  void; mismatched return types either get rejected at registration
+  time or, more dangerously, silently discard the result when the
+  script writes `obj.prop = value`. wxWidgets has several setters
+  that legitimately return `bool` (`wxControl::SetLabelMarkup`,
+  `wxTextEntry::SetHint`, …). Two acceptable shapes:
+    - Drop the `property` keyword and register the bool-returning
+      method as a regular method (script writes
+      `ok = ctrl.set_label_markup("...")`). This is what
+      `set_label_markup` does.
+    - Keep the `property` keyword but wrap to a `void`-returning
+      adapter, accepting that the bool result is discarded. This
+      is what `set_hint` does because the bool only signals
+      "platform supports hints" and is rarely actionable.
+  Pick one shape per setter and document the choice next to the
+  registration; do not register `bool set_xxx(...) property`.
 - **`asMETHOD` does not work on methods that the type only inherits
   via multiple inheritance.** `wxCommandEvent` derives from `wxEvent`
   *and* `wxEventBasicPayloadMixin`. Methods declared in the mixin

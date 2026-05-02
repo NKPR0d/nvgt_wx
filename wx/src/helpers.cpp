@@ -314,14 +314,34 @@ void wx_window_scroll_window(wxWindow* self, int dx, int dy) {
 
 wxWindow* wx_window_get_parent(wxWindow* self) {
     wxWindow* p = self ? self->GetParent() : nullptr;
-    if (p) AddRef(p);
-    return p;
+    return EnsureTracked(p);
 }
 
 wxWindow* wx_window_get_grandparent(wxWindow* self) {
     wxWindow* p = self ? self->GetGrandParent() : nullptr;
-    if (p) AddRef(p);
-    return p;
+    return EnsureTracked(p);
+}
+
+// wxWindow style flags. wxWidgets stores these as `long`; AngelScript
+// only knows fixed-width int. asMETHOD-binding the wx accessors directly
+// happens to work on Windows MSVC x64 because LLP64 makes int and long
+// the same width there, but on LP64 platforms (Linux x86_64, macOS,
+// most Unixes on aarch64) `long` is 64-bit and a plain int caller would
+// truncate setters and read garbage from getters. Wrap explicitly.
+int wx_window_get_window_style(wxWindow* self) {
+    return self ? static_cast<int>(self->GetWindowStyleFlag()) : 0;
+}
+
+void wx_window_set_window_style(wxWindow* self, int style) {
+    if (self) self->SetWindowStyleFlag(static_cast<long>(style));
+}
+
+int wx_window_get_extra_style(wxWindow* self) {
+    return self ? static_cast<int>(self->GetExtraStyle()) : 0;
+}
+
+void wx_window_set_extra_style(wxWindow* self, int style) {
+    if (self) self->SetExtraStyle(static_cast<long>(style));
 }
 
 // ---------------------------------------------------------------------------
@@ -865,9 +885,12 @@ std::string wx_text_entry_get_hint(wxWindow* self) {
     return e ? std::string(e->GetHint().utf8_str()) : "";
 }
 
-bool wx_text_entry_set_hint(wxWindow* self, const std::string& hint) {
-    auto e = GetEntry(self);
-    return e ? e->SetHint(wxString::FromUTF8(hint.c_str())) : false;
+void wx_text_entry_set_hint(wxWindow* self, const std::string& hint) {
+    if (auto e = GetEntry(self)) {
+        // The bool result from wxTextEntry::SetHint is intentionally
+        // discarded — see common.h for the rationale.
+        e->SetHint(wxString::FromUTF8(hint.c_str()));
+    }
 }
 
 bool wx_text_entry_auto_complete_file_names(wxWindow* self) {

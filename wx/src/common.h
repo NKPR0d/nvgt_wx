@@ -160,6 +160,26 @@ T* Track(T* obj) {
     return obj;
 }
 
+// EnsureTracked<T>: like Track, but only binds the wxEVT_DESTROY hook the
+// FIRST time we see this pointer. Use when returning a borrowed wxWindow
+// pointer that may or may not have been created through one of the
+// `wx.create_*` factories — e.g. wx_window_get_parent / get_grandparent,
+// where the parent is usually script-created (and so already tracked) but
+// could in principle be a wxWidgets-internal intermediate window. Without
+// a destroy hook, an untracked window would leave a stale entry in
+// g_ref_counts after wxWidgets destroyed it, and Release()'s `if (!parent)
+// Destroy()` path could destroy a window the bridge does not own.
+template<typename T>
+T* EnsureTracked(T* obj) {
+    if (!obj) return nullptr;
+    if (g_ref_counts.find(obj) == g_ref_counts.end()) {
+        wxWindow* win = dynamic_cast<wxWindow*>(obj);
+        if (win) win->Bind(wxEVT_DESTROY, &OnObjectDestroyed);
+    }
+    AddRef(obj);
+    return obj;
+}
+
 // ---------------------------------------------------------------------------
 // Free-function adapters (helpers.cpp). Declared here so register.cpp's
 // macros can asFUNCTION() them without including helpers.cpp's bodies.
@@ -248,11 +268,25 @@ void wx_window_refresh(wxWindow* self);
 // that is dereferenced unconditionally on MSW; pass nullptr explicitly.
 void wx_window_scroll_window(wxWindow* self, int dx, int dy);
 
-// Parent navigation. Wrappers add the AddRef on the returned wxWindow
-// because the script-side ref counter would otherwise leak the borrowed
-// pointer.
+// Parent navigation. Wrappers run EnsureTracked so the returned wxWindow
+// gains a wxEVT_DESTROY hook the first time it crosses the boundary,
+// even if it was created by wxWidgets internally rather than by a
+// `wx.create_*` factory.
 wxWindow* wx_window_get_parent(wxWindow* self);
 wxWindow* wx_window_get_grandparent(wxWindow* self);
+
+// Window-style flag adapters. wxWindow uses `long` for the style flag
+// and the extra-style flag; AngelScript exposes them as `int`. On
+// Windows MSVC x64 `int` and `long` are both 32-bit so a direct
+// asMETHOD binding happens to work, but `long` is 64-bit on Linux
+// x86_64 / macOS x86_64 / aarch64 (LP64), where the C++ side would
+// then read garbage from the upper word. Wrap with explicit casts
+// so the AS-visible signature is portable. See AGENTS.md "Things to
+// know before changing the bridge" for the full rule.
+int wx_window_get_window_style(wxWindow* self);
+void wx_window_set_window_style(wxWindow* self, int style);
+int wx_window_get_extra_style(wxWindow* self);
+void wx_window_set_extra_style(wxWindow* self, int style);
 
 std::string wx_control_get_label(wxControl* self);
 void wx_control_set_label(wxControl* self, const std::string& label);
@@ -371,7 +405,13 @@ void wx_text_entry_set_insertion_point_end(wxWindow* self);
 int wx_text_entry_get_last_position(wxWindow* self);
 void wx_text_entry_force_upper(wxWindow* self);
 std::string wx_text_entry_get_hint(wxWindow* self);
-bool wx_text_entry_set_hint(wxWindow* self, const std::string& hint);
+// wxTextEntry::SetHint returns bool to signal whether the platform
+// accepted the hint, but AngelScript property setters must return
+// `void` (otherwise either the engine refuses the registration or
+// `entry.hint = "..."` silently discards the bool). Drop the bool
+// here; if a script needs the rarely-useful platform-supported flag
+// it can call wxTextEntry::SetHint through a future explicit binding.
+void wx_text_entry_set_hint(wxWindow* self, const std::string& hint);
 bool wx_text_entry_auto_complete_file_names(wxWindow* self);
 bool wx_text_entry_auto_complete_directories(wxWindow* self);
 
