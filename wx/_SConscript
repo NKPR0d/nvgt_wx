@@ -24,7 +24,13 @@ if plugin_env["PLATFORM"] == "win32":
 
 shared_lib = plugin_env.SharedLibrary(
     target="#release/lib/" + plugin_name,
-    source=["wx.cpp"]
+    source=[
+        "wx.cpp",
+        "src/runtime.cpp",
+        "src/helpers.cpp",
+        "src/manager.cpp",
+        "src/register.cpp",
+    ]
 )
 
 Return("shared_lib")
