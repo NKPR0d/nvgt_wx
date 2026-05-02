@@ -2,6 +2,56 @@
 
 Guidance for humans and AI agents contributing to **nvgt_wx**, a wxWidgets plugin for NVGT.
 
+## Capturing knowledge (read this first)
+
+This file is the project memory. Whenever you learn something
+non-obvious about the bridge, the wxWidgets/AngelScript boundary, the
+build, the CI, or the source layout — write it down here, in the
+section that fits, in the same PR that introduces the change. Do not
+defer it to "later" or to a separate documentation pass; "later" never
+happens and the knowledge gets lost.
+
+What belongs in AGENTS.md:
+
+- conventions (naming, file ownership, comment language, …);
+- footguns and the reason behind a non-obvious workaround
+  (`asMETHOD` does not propagate C++ defaults, `nvgt_plugin.h`
+  include-order contract, `WXUSINGDLL` link surface, …);
+- decisions that future contributors must not silently undo
+  (e.g. `Refresh` wrapper exists *because* the C++ default reads a
+  garbage pointer on MSW — without that comment somebody will
+  "simplify" it back to `asMETHOD(wxWindow, Refresh)`);
+- API conventions visible to script authors that are not obvious
+  from the registration call alone (value-type properties using
+  `to_wx`/`from_wx`, the `wx_text_entry` mix-in trick, the
+  per-control `wx_*_style` enum split, …);
+- audit summaries of what the bridge does and does not yet expose
+  on a given wx class, so the next person knows where to start.
+
+What does *not* belong here:
+
+- per-PR changelogs (those go in the PR description);
+- TODO lists for one-off tasks (use the issue tracker / the PR);
+- generated reference output (link to wx documentation instead).
+
+If you find existing guidance that turned out to be wrong or stale,
+fix it in the same PR that exposes the contradiction. Out-of-date
+AGENTS.md is worse than no AGENTS.md.
+
+## Language
+
+- **Source code comments are written in English.** No exceptions —
+  even when the author and the reviewer share another language, the
+  next contributor or AI agent may not. Mixed-language comments
+  inside the same file are particularly bad and must be cleaned up
+  in the same PR that introduces them.
+- **Commit messages and pull request descriptions are written in
+  English.** Same reasoning: commit history and PR archaeology are
+  the second-most-important form of project memory after this file.
+- AngelScript identifiers (type names, method names, enum values)
+  follow the casing rules in *Naming and code conventions* below
+  and are also English.
+
 ## What this repo is
 
 `nvgt_wx` is a native plugin for the NonVisual Gaming Toolkit (NVGT)
@@ -295,7 +345,9 @@ instead of `Track`.
 - Constants are exposed through enums named `wx_<topic>` with values
   prefixed `WX_<TOPIC>_<NAME>`. Avoid mixing unrelated bitmask families
   in the same enum.
-- Comments in the source code are written in **English**.
+- Source code comments, commit messages and PR descriptions are
+  in English; see the dedicated *Language* section at the top of
+  this file.
 - The plugin is split across `wx.cpp + src/{runtime,helpers,manager,register}.cpp`.
   When adding code, place it in the file that matches its role (see the
   "Repository layout" section). `wx.cpp` itself stays minimal — only
@@ -304,7 +356,7 @@ instead of `Track`.
 
 ## Commit and PR conventions
 
-- Commits and pull requests are written in **English**.
+- Language: see the *Language* section at the top of this file.
 - Keep changes focused; prefer multiple small PRs over one large one.
 - When adding new widgets or sizers, also register the relevant style
   bits and any `wxCommandEvent` (or other event) accessors that go with
@@ -375,13 +427,143 @@ instead of `Track`.
   `asMETHOD`. The same caveat applies to any future `wx*Event`
   subclass that mixes in payload via MI.
 
+## Value-type conventions (geometry and colour)
+
+The bridge exposes four POD-ish value types to scripts:
+
+- `wx_point` — alias of `wxPoint` (two `int`s, `x` / `y`).
+- `wx_size`  — alias of `wxSize` (two `int`s, exposed as `width` /
+  `height` to scripts; the underlying members are `wxSize::x` and
+  `wxSize::y`).
+- `wx_rect`  — alias of `wxRect` (`x` / `y` / `width` / `height`).
+- `wx_colour` — **custom** POD struct of four `uint8_t` (`r` / `g` /
+  `b` / `a`). It is *not* `wxColour`. `wxColour` is not
+  layout-stable (it can carry a platform handle on MSW) and exposing
+  it as a fixed-property AS value type would crash on construction
+  in some builds. Convert at the boundary with `to_wx(wx_colour)` and
+  `from_wx(wxColour)`; both are `inline` in `common.h`.
+
+Why aliases rather than fresh types for the first three: `wxPoint`,
+`wxSize` and `wxRect` are documented by upstream as plain `int`
+aggregates and have stable layouts across builds, so AS can address
+their members directly via `offsetof`. `wxColour` is the outlier.
+
+When wrapping a wxWidgets method that takes or returns one of these
+types:
+
+- The free-function wrapper signature uses the AS-visible name:
+  ```cpp
+  wx_point wx_window_get_position(wxWindow* self);
+  void     wx_window_set_position(wxWindow* self, const wx_point& p);
+  ```
+- For `wx_colour`, run the conversion explicitly:
+  ```cpp
+  wx_colour wx_window_get_background_colour(wxWindow* self) {
+      return from_wx(self->GetBackgroundColour());
+  }
+  void wx_window_set_background_colour(wxWindow* self, const wx_colour& c) {
+      self->SetBackgroundColour(to_wx(c));
+  }
+  ```
+- Register the method as a `property` so scripts can write
+  `win.size = wx_size(640, 480)` instead of `win.set_size(...)`.
+- Geometry getters are `const` on the AS side; setters are not.
+
+`register_value_types(engine)` is called from the very top of
+`register_all_types()` *before* any object type. AS rejects a
+`RegisterObjectMethod` whose signature mentions a not-yet-registered
+type, so the value types must come first. Do not move that call.
+
+## Style enums (per-control)
+
+Style bitmasks are split into per-control enums:
+
+| AS enum                  | Constants live there                |
+|--------------------------|-------------------------------------|
+| `wx_window_style`        | `WX_BORDER_*`, `WX_HSCROLL`,        |
+|                          | `WX_VSCROLL`, `WX_TAB_TRAVERSAL`,   |
+|                          | `WX_NO_BORDER`, ...                 |
+| `wx_frame_style`         | `WX_DEFAULT_FRAME_STYLE`,           |
+|                          | `WX_CAPTION`, `WX_RESIZE_BORDER`, ...|
+| `wx_button_style`        | `WX_BU_*`                           |
+| `wx_check_box_style`     | `WX_CHK_2STATE`, `WX_CHK_3STATE`,   |
+|                          | `WX_CHK_ALLOW_3RD_STATE_FOR_USER`   |
+| `wx_text_ctrl_style`     | `WX_TE_*`                           |
+| `wx_radio_button_style`  | `WX_RB_GROUP`, `WX_RB_SINGLE`       |
+
+Two reasons not to merge them back into a single `wx_style`:
+
+1. Several constants overlap numerically across families
+   (e.g. `WX_TE_LEFT` shares a bit with `WX_BU_LEFT` but means a
+   different thing), so a shared enum hides bugs.
+2. New controls add their own families; mixing them into one enum
+   means the script-side namespace grows without bound.
+
+Constant **names** are unchanged across the split, only the AS enum
+that owns them differs. Scripts continue to write
+`WX_DEFAULT_FRAME_STYLE | WX_RESIZE_BORDER` because AS implicitly
+converts enum values to `int` for `int`-typed parameters; OR-ing
+across families is therefore still legal at the call site.
+
+## Audit summary (current bridge surface)
+
+- **`wxWindow`** — geometry/colour as value-type properties; show /
+  hide / enable / focus / layout / centre / fit / refresh / scroll /
+  raise / lower / freeze / thaw / capture / drag-accept / dpi-scale /
+  parent / grandparent / sizer / window-style / extra-style / tooltip
+  / name / help-text / text-extent / client-screen conversions.
+  Not exposed yet: hit-testing, child-window enumeration, accelerator
+  tables, validators, layout direction, transparency.
+- **`wxTopLevelWindow`** — title / full-screen / maximize / iconize /
+  centre-on-screen / enable-{close,maximize,minimize}-button / request
+  user attention.
+- **`wxControl`** — label / label-text / label-markup as properties,
+  plus `command(wx_command_event@)` to fire programmatic events.
+- **`wxTextEntry` mix-in** (consumed by `wx_text_entry` and
+  `wx_text_control`) — value / change-value / write / append / clear /
+  copy / cut / paste / remove / undo / redo / can-* / range / selection
+  / editable / empty / replace / select-all / select-none / max-length
+  / insertion point / last position / force-upper / hint / autocomplete
+  (file / dir).
+- **`wxSizer`** — add / insert / prepend (for windows, sizers,
+  spacers, stretch-spacers); detach / remove / replace; show / hide /
+  is-shown / show-all / show-items / are-any-items-shown / clear /
+  delete-windows; layout / fit / fit-inside / set-size-hints /
+  compute-fitting-{client,window}-size; geometry properties; min-size
+  / set-item-min-size; item-count / find / get-item / is-empty.
+- **`wxSizerItem`** — window / sizer / proportion / flag / border;
+  size / calc-min / min-size{,-with-border} / max-size{,-with-border}
+  / rect / position / spacer; set-init-size; set-ratio (size or
+  float); is-{window,sizer,spacer,shown}; show; detach / delete.
+- **`wxBoxSizer`** — currently only inherits the `wxSizer` surface.
+  No `wx_grid_sizer`, `wx_flex_grid_sizer`, `wx_grid_bag_sizer` or
+  `wx_wrap_sizer` yet.
+- **Concrete widgets** — `wx_frame`, `wx_panel`, `wx_button`,
+  `wx_check_box` (`get_value` / `set_value` / `Get3StateValue` /
+  `Set3StateValue` / `is_3rd_state_allowed_for_user` / `is_3state` /
+  `is_checked`), `wx_static_text` (`wrap`), `wx_text_control` (full
+  `wxTextEntry` surface), `wx_radio_button` (`get_value` / `set_value`
+  / first/last/next/previous-in-group).
+- **Events** — `wx_event` (skip, type, event-object), `wx_key_event`
+  (key code, unicode, modifier helpers), `wx_mouse_event` (xy,
+  buttons, dclick), `wx_command_event` (string / int / extra-long
+  / selection / is-checked / is-selection).
+- **Manager** — `wx::update`, `wx::create_{frame,button,check_box,box_sizer,
+  panel,static_text,text_control,radio_button}`. `create_frame` takes
+  a `wx_size` for the initial window size.
+
+This list is the source of truth for "what works"; if you remove or
+rename something here, update this section in the same PR.
+
 ## Roadmap (high-level)
 
-- **Phase 0 — foundation:** value types (`wx_point/size/rect/colour/font`),
-  per-control style enums, `wxEntryCleanup()` on shutdown, markdown
-  documentation, CI. (`wx_command_event`, `unbind`, default `Skip()`,
-  `bind` deduplication and the `WxManager` AS-flag fix have already
-  landed.)
+- **Phase A (this PR) — value types and per-control style enums.**
+  `wx_point/size/rect/colour` are registered as AS value types and
+  every geometry / colour accessor uses them as properties; the
+  monolithic `wx_style` enum is split into one enum per control
+  family. Breaking change vs. earlier PRs.
+- **Phase 0 — remaining foundation work:** `wx_font`,
+  `wxEntryCleanup()` on shutdown.
 - **Phase 1 — basic GUI:** the rest of the sizers; dialogs
   (`wx_dialog`, `wx_message_dialog`, `wx_file_dialog`, …); selectors
   (`wx_choice`, `wx_combo_box`, `wx_list_box`, `wx_radio_box`); range

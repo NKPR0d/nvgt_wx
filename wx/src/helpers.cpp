@@ -257,13 +257,12 @@ wx_size wx_window_get_text_extent(wxWindow* self, const std::string& text) {
     return self ? self->GetTextExtent(wxString::FromUTF8(text.c_str())) : wxSize(0, 0);
 }
 
-std::string wx_window_get_label(wxWindow* self) {
-    return self ? std::string(self->GetLabel().utf8_str()) : "";
-}
-
-void wx_window_set_label(wxWindow* self, const std::string& label) {
-    if (self) self->SetLabel(wxString::FromUTF8(label.c_str()));
-}
+// Note: there is intentionally no wx_window_get_label / set_label here.
+// wxControl overrides SetLabel and the script-side `label` property is
+// registered only on wx_control derivatives (REG_CONTROL_METHODS), with
+// the wx_control wrapper additionally syncing the window Name. Adding a
+// wx_window-level binding would either collide with REG_CONTROL_METHODS
+// (duplicate registration) or silently drop the SetName side effect.
 
 std::string wx_window_get_name(wxWindow* self) {
     return self ? std::string(self->GetName().utf8_str()) : "";
@@ -313,6 +312,18 @@ void wx_window_scroll_window(wxWindow* self, int dx, int dy) {
     if (self) self->ScrollWindow(dx, dy, nullptr);
 }
 
+wxWindow* wx_window_get_parent(wxWindow* self) {
+    wxWindow* p = self ? self->GetParent() : nullptr;
+    if (p) AddRef(p);
+    return p;
+}
+
+wxWindow* wx_window_get_grandparent(wxWindow* self) {
+    wxWindow* p = self ? self->GetGrandParent() : nullptr;
+    if (p) AddRef(p);
+    return p;
+}
+
 // ---------------------------------------------------------------------------
 // wxControl.
 // ---------------------------------------------------------------------------
@@ -342,6 +353,13 @@ void wx_control_set_label_text(wxControl* self, const std::string& text) {
 
 bool wx_control_set_label_markup(wxControl* self, const std::string& markup) {
     return self ? self->SetLabelMarkup(wxString::FromUTF8(markup.c_str())) : false;
+}
+
+// wxControl::Command(wxCommandEvent&) takes the event by reference.
+// asMETHOD cannot deduce a pointer-to-reference parameter automatically;
+// the wrapper takes wx_command_event@ from script and dereferences.
+void wx_control_command(wxControl* self, wxCommandEvent* e) {
+    if (self && e) self->Command(*e);
 }
 
 // ---------------------------------------------------------------------------

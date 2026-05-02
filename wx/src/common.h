@@ -230,9 +230,10 @@ void wx_window_set_size_hints(wxWindow* self, const wx_size& min_size, const wx_
 void wx_window_set_initial_size(wxWindow* self, const wx_size& s);
 wx_size wx_window_get_text_extent(wxWindow* self, const std::string& text);
 
-// String-property adapters.
-std::string wx_window_get_label(wxWindow* self);
-void wx_window_set_label(wxWindow* self, const std::string& label);
+// String-property adapters. Note: label is registered only on
+// wx_control derivatives (REG_CONTROL_METHODS) to avoid clashing with
+// the wx_control-specific override that also syncs the window Name;
+// see helpers.cpp.
 std::string wx_window_get_name(wxWindow* self);
 void wx_window_set_name(wxWindow* self, const std::string& name);
 std::string wx_window_get_help_text(wxWindow* self);
@@ -247,11 +248,18 @@ void wx_window_refresh(wxWindow* self);
 // that is dereferenced unconditionally on MSW; pass nullptr explicitly.
 void wx_window_scroll_window(wxWindow* self, int dx, int dy);
 
+// Parent navigation. Wrappers add the AddRef on the returned wxWindow
+// because the script-side ref counter would otherwise leak the borrowed
+// pointer.
+wxWindow* wx_window_get_parent(wxWindow* self);
+wxWindow* wx_window_get_grandparent(wxWindow* self);
+
 std::string wx_control_get_label(wxControl* self);
 void wx_control_set_label(wxControl* self, const std::string& label);
 std::string wx_control_get_label_text(wxControl* self);
 void wx_control_set_label_text(wxControl* self, const std::string& text);
 bool wx_control_set_label_markup(wxControl* self, const std::string& markup);
+void wx_control_command(wxControl* self, wxCommandEvent* e);
 
 std::string wx_tlw_get_title(wxTopLevelWindow* self);
 void wx_tlw_set_title(wxTopLevelWindow* self, const std::string& title);
