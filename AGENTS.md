@@ -254,8 +254,11 @@ instead of `Track`.
   prefixed `WX_<TOPIC>_<NAME>`. Avoid mixing unrelated bitmask families
   in the same enum.
 - Comments in the source code are written in **English**.
-- Keep `wx.cpp` self-contained for now (single translation unit). It
-  may be split when it grows further.
+- The plugin is split across `wx.cpp + src/{runtime,helpers,manager,register}.cpp`.
+  When adding code, place it in the file that matches its role (see the
+  "Repository layout" section). `wx.cpp` itself stays minimal — only
+  the `plugin_main()` entry point and the include-order contract for
+  `nvgt_plugin.h` documented above.
 
 ## Commit and PR conventions
 
