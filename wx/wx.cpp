@@ -981,8 +981,11 @@ plugin_main(nvgt_plugin_shared* shared) {
     REGISTER_WX_CONTROL("wx_check_box", wxCheckBox);
     engine->RegisterObjectMethod("wx_check_box", "bool get_value() const property", asMETHOD(wxCheckBox, GetValue), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_check_box", "void set_value(bool value) property", asMETHOD(wxCheckBox, SetValue), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_check_box", "wx_checkbox_state get_3state_value() const property", asMETHOD(wxCheckBox, Get3StateValue), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_check_box", "void set_3state_value(wx_checkbox_state state) property", asMETHOD(wxCheckBox, Set3StateValue), asCALL_THISCALL);
+    // get_3state_value/set_3state_value are registered as plain methods (no
+    // 'property') because the derived property name '3state_value' is not a
+    // valid AngelScript identifier (it starts with a digit).
+    engine->RegisterObjectMethod("wx_check_box", "wx_checkbox_state get_3state_value() const", asMETHOD(wxCheckBox, Get3StateValue), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_check_box", "void set_3state_value(wx_checkbox_state state)", asMETHOD(wxCheckBox, Set3StateValue), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_check_box", "bool is_3rd_state_allowed_for_user()", asMETHOD(wxCheckBox, Is3rdStateAllowedForUser), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_check_box", "bool is_3state()", asMETHOD(wxCheckBox, Is3State), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_check_box", "bool is_checked()", asMETHOD(wxCheckBox, IsChecked), asCALL_THISCALL);
@@ -1045,11 +1048,16 @@ plugin_main(nvgt_plugin_shared* shared) {
     engine->RegisterObjectMethod("wx_mouse_event", "bool leaving()", asMETHOD(wxMouseEvent, Leaving), asCALL_THISCALL);
 
     engine->RegisterObjectMethod("wx_event", "wx_command_event@ opCast()", asFUNCTION(event_to_derived<wxCommandEvent>), asCALL_CDECL_OBJLAST);
-    engine->RegisterObjectMethod("wx_command_event", "int get_int() const property", asMETHOD(wxCommandEvent, GetInt), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_command_event", "void set_int(int value) property", asMETHOD(wxCommandEvent, SetInt), asCALL_THISCALL);
+    // get_int/set_int and get_string/set_string are registered as plain
+    // methods (no 'property') because the derived property names would be
+    // 'int' (a reserved AngelScript keyword) and 'string' (a registered
+    // type name), neither of which is usable from script as obj.int /
+    // obj.string.
+    engine->RegisterObjectMethod("wx_command_event", "int get_int() const", asMETHOD(wxCommandEvent, GetInt), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_command_event", "void set_int(int value)", asMETHOD(wxCommandEvent, SetInt), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_command_event", "int get_selection() const property", asMETHOD(wxCommandEvent, GetSelection), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_command_event", "string get_string() const property", asFUNCTION(wx_command_event_get_string), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_command_event", "void set_string(const string &in value) property", asFUNCTION(wx_command_event_set_string), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_command_event", "string get_string() const", asFUNCTION(wx_command_event_get_string), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_command_event", "void set_string(const string &in value)", asFUNCTION(wx_command_event_set_string), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_command_event", "bool is_checked() const", asMETHOD(wxCommandEvent, IsChecked), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_command_event", "bool is_selection() const", asMETHOD(wxCommandEvent, IsSelection), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_command_event", "int get_extra_long() const property", asMETHOD(wxCommandEvent, GetExtraLong), asCALL_THISCALL);
