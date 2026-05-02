@@ -267,8 +267,14 @@ instead of `Track`.
   AngelScript-level defaults), or wrap it in a free function that
   fills in the default and call that via `asFUNCTION /
   asCALL_CDECL_OBJFIRST`. The existing wrappers around `SetSizer`,
-  `ShowFullScreen` and `wxMouseEvent::Button*` are the canonical
-  examples.
+  `ShowFullScreen`, `wxMouseEvent::Button*` and `Refresh` are the
+  canonical examples. **Pointer defaults are especially dangerous**:
+  wxWidgets methods like `wxWindow::Refresh(bool, const wxRect*)` will
+  dereference the pointer parameter on the MSW path, so a garbage
+  pointer is not just an unused-byte read — it crashes the process.
+  When adding a new registration, double-check the C++ signature for
+  defaulted parameters (including ones documented only in the wx
+  reference, not the header).
 - `wxCommandEvent::GetSelection()` and `wxCommandEvent::GetInt()` read
   the **same** internal field (`m_commandInt`). The naming is upstream
   semantics: `GetSelection` is meaningful for list-style controls,
@@ -278,9 +284,24 @@ instead of `Track`.
 - `wxCommandEvent::GetExtraLong()` / `SetExtraLong()` use C++ `long`,
   which is 32-bit on Windows MSVC x64 (the current build target) but
   64-bit on Linux x86_64. The AngelScript signature is registered as
-  `int` to match the Windows ABI. Any future Linux build needs to
-  switch to `int64` plus a `static_cast<long>` shim in a wrapper, not
-  blindly bind `asMETHOD(wxCommandEvent, SetExtraLong)`.
+  `int` and the wrapper does an explicit `static_cast<long>` /
+  `static_cast<int>`. Any future Linux build needs to flip the AS
+  signature to `int64` (the wrapper already does the cast). Do not
+  bind `asMETHOD(wxCommandEvent, SetExtraLong)` directly.
+- **`asMETHOD` does not work on methods that the type only inherits
+  via multiple inheritance.** `wxCommandEvent` derives from `wxEvent`
+  *and* `wxEventBasicPayloadMixin`. Methods declared in the mixin
+  (`GetInt`, `SetInt`, `GetExtraLong`, `SetExtraLong`) cannot be
+  registered with `asMETHOD(wxCommandEvent, GetInt)` — MSVC refuses
+  the C-style cast inside the `asMETHOD` macro because pointer-to-
+  member representations differ across MI offsets. The error looks
+  like `cannot convert "int (wxEventBasicPayloadMixin::*)() const" to
+  "void (wxCommandEvent::*)()"`. Always wrap such methods in a free
+  function and register via `asFUNCTION / asCALL_CDECL_OBJFIRST`.
+  Methods declared directly on `wxCommandEvent` itself
+  (`GetSelection`, `IsChecked`, `IsSelection`) bind fine with
+  `asMETHOD`. The same caveat applies to any future `wx*Event`
+  subclass that mixes in payload via MI.
 
 ## Roadmap (high-level)
 

@@ -128,6 +128,10 @@ bool wx_mouse_event_button_dclick(wxMouseEvent* self);
 
 std::string wx_command_event_get_string(wxCommandEvent* self);
 void wx_command_event_set_string(wxCommandEvent* self, const std::string& s);
+int wx_command_event_get_int(wxCommandEvent* self);
+void wx_command_event_set_int(wxCommandEvent* self, int value);
+int wx_command_event_get_extra_long(wxCommandEvent* self);
+void wx_command_event_set_extra_long(wxCommandEvent* self, int value);
 
 std::string wx_window_get_tool_tip(wxWindow* self);
 void wx_window_set_tool_tip(wxWindow* self, const std::string& text);
@@ -141,6 +145,7 @@ void wx_window_get_size(wxWindow* self, int& out_w, int& out_h);
 void wx_window_set_size(wxWindow* self, int w, int h);
 wxSizer* wx_window_get_sizer(wxWindow* self);
 void wx_window_set_sizer(wxWindow* self, wxSizer* sizer);
+void wx_window_refresh(wxWindow* self);
 
 std::string wx_control_get_label(wxControl* self);
 void wx_control_set_label(wxControl* self, const std::string& label);

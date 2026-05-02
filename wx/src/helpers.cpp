@@ -71,6 +71,34 @@ void wx_command_event_set_string(wxCommandEvent* self, const std::string& s) {
     if (self) self->SetString(wxString::FromUTF8(s.c_str()));
 }
 
+// GetInt/SetInt/GetExtraLong/SetExtraLong are inherited by wxCommandEvent
+// from wxEventBasicPayloadMixin via multiple inheritance. asMETHOD takes
+// &wxCommandEvent::GetInt which yields a pointer-to-member-of-base, and
+// MSVC then refuses to convert that to a pointer-to-member-of-wxCommandEvent
+// because MI member-pointers have a different representation. Wrap as
+// free functions to sidestep the conversion entirely.
+//
+// GetExtraLong/SetExtraLong upstream uses C++ `long`. On MSVC x64 long is
+// 32-bit so int matches the ABI; on Linux x86_64 long is 64-bit and the
+// raw asMETHOD binding would silently truncate. The wrappers cast through
+// the native wx type so adding a non-Windows build later just needs to
+// flip the AS signature to int64 (no other code change).
+int wx_command_event_get_int(wxCommandEvent* self) {
+    return self ? self->GetInt() : 0;
+}
+
+void wx_command_event_set_int(wxCommandEvent* self, int value) {
+    if (self) self->SetInt(value);
+}
+
+int wx_command_event_get_extra_long(wxCommandEvent* self) {
+    return self ? static_cast<int>(self->GetExtraLong()) : 0;
+}
+
+void wx_command_event_set_extra_long(wxCommandEvent* self, int value) {
+    if (self) self->SetExtraLong(static_cast<long>(value));
+}
+
 // ---------------------------------------------------------------------------
 // wxWindow.
 // ---------------------------------------------------------------------------
@@ -139,6 +167,17 @@ wxSizer* wx_window_get_sizer(wxWindow* self) {
 // any orphaned sizer once its last handle is released.
 void wx_window_set_sizer(wxWindow* self, wxSizer* sizer) {
     if (self) self->SetSizer(sizer, false);
+}
+
+// wxWindow::Refresh has signature
+//   Refresh(bool eraseBackground = true, const wxRect* rect = nullptr).
+// asMETHOD does not propagate the C++ defaults: when AngelScript calls a
+// zero-arg refresh() the C++ side still reads `rect` from whatever happens
+// to be in the parameter register, and on MSW the implementation
+// dereferences it unconditionally. Wrap with explicit defaults so the
+// AS-side call passes nullptr through.
+void wx_window_refresh(wxWindow* self) {
+    if (self) self->Refresh(true, nullptr);
 }
 
 // ---------------------------------------------------------------------------

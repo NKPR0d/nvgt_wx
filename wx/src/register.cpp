@@ -33,7 +33,7 @@ namespace {
     engine->RegisterObjectMethod(name, "void layout()", asMETHOD(wxWindow, Layout), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void center(int direction = 3)", asMETHOD(wxWindow, Center), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "int get_id() const property", asMETHOD(wxWindow, GetId), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "void refresh()", asMETHOD(wxWindow, Refresh), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void refresh()", asFUNCTION(wx_window_refresh), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void update()", asMETHOD(wxWindow, Update), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "bool destroy()", asMETHOD(wxWindow, Destroy), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "bool close(bool force = false)", asMETHOD(wxWindow, Close), asCALL_THISCALL); \
@@ -435,48 +435,48 @@ void register_all_types(asIScriptEngine* engine) {
 
     engine->RegisterObjectMethod("wx_event", "wx_key_event@ opCast()", asFUNCTION(event_to_derived<wxKeyEvent>), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectMethod("wx_event", "wx_mouse_event@ opCast()", asFUNCTION(event_to_derived<wxMouseEvent>), asCALL_CDECL_OBJLAST);
-    engine->RegisterObjectMethod("wx_event", "wx_window@ get_event_object()", asFUNCTION(wx_event_get_event_object), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_event", "int get_event_type()", asMETHOD(wxEvent, GetEventType), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_event", "wx_window@ get_event_object() const", asFUNCTION(wx_event_get_event_object), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_event", "int get_event_type() const", asMETHOD(wxEvent, GetEventType), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_event", "void skip(bool skip = true)", asMETHOD(wxEvent, Skip), asCALL_THISCALL);
 
-    engine->RegisterObjectMethod("wx_key_event", "int get_key_code()", asMETHOD(wxKeyEvent, GetKeyCode), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_key_event", "int get_unicode_key()", asMETHOD(wxKeyEvent, GetUnicodeKey), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_key_event", "bool control_down()", asFUNCTION(wx_key_event_control_down), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_key_event", "bool shift_down()", asFUNCTION(wx_key_event_shift_down), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_key_event", "bool alt_down()", asFUNCTION(wx_key_event_alt_down), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_key_event", "int get_key_code() const", asMETHOD(wxKeyEvent, GetKeyCode), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_key_event", "int get_unicode_key() const", asMETHOD(wxKeyEvent, GetUnicodeKey), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_key_event", "bool control_down() const", asFUNCTION(wx_key_event_control_down), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_key_event", "bool shift_down() const", asFUNCTION(wx_key_event_shift_down), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_key_event", "bool alt_down() const", asFUNCTION(wx_key_event_alt_down), asCALL_CDECL_OBJFIRST);
 
-    engine->RegisterObjectMethod("wx_mouse_event", "bool button()", asFUNCTION(wx_mouse_event_button), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool button_down()", asFUNCTION(wx_mouse_event_button_down), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool button_up()", asFUNCTION(wx_mouse_event_button_up), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool button_dclick()", asFUNCTION(wx_mouse_event_button_dclick), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool left_down()", asMETHOD(wxMouseEvent, LeftDown), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool left_up()", asMETHOD(wxMouseEvent, LeftUp), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool left_dclick()", asMETHOD(wxMouseEvent, LeftDClick), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool middle_down()", asMETHOD(wxMouseEvent, MiddleDown), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool middle_up()", asMETHOD(wxMouseEvent, MiddleUp), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool middle_dclick()", asMETHOD(wxMouseEvent, MiddleDClick), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool right_down()", asMETHOD(wxMouseEvent, RightDown), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool right_up()", asMETHOD(wxMouseEvent, RightUp), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool right_dclick()", asMETHOD(wxMouseEvent, RightDClick), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool aux1_down()", asMETHOD(wxMouseEvent, Aux1Down), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool aux1_up()", asMETHOD(wxMouseEvent, Aux1Up), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool aux1_dclick()", asMETHOD(wxMouseEvent, Aux1DClick), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool aux2_down()", asMETHOD(wxMouseEvent, Aux2Down), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool aux2_up()", asMETHOD(wxMouseEvent, Aux2Up), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool aux2_dclick()", asMETHOD(wxMouseEvent, Aux2DClick), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool left_is_down()", asFUNCTION(wx_mouse_event_left_is_down), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool middle_is_down()", asFUNCTION(wx_mouse_event_middle_is_down), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool right_is_down()", asFUNCTION(wx_mouse_event_right_is_down), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool aux1_is_down()", asFUNCTION(wx_mouse_event_aux1_is_down), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool aux2_is_down()", asFUNCTION(wx_mouse_event_aux2_is_down), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_mouse_event", "int get_x()", asFUNCTION(wx_mouse_event_get_x), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_mouse_event", "int get_y()", asFUNCTION(wx_mouse_event_get_y), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_mouse_event", "int get_wheel_rotation()", asMETHOD(wxMouseEvent, GetWheelRotation), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "int get_wheel_delta()", asMETHOD(wxMouseEvent, GetWheelDelta), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool dragging()", asMETHOD(wxMouseEvent, Dragging), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool moving()", asMETHOD(wxMouseEvent, Moving), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool entering()", asMETHOD(wxMouseEvent, Entering), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_mouse_event", "bool leaving()", asMETHOD(wxMouseEvent, Leaving), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool button() const", asFUNCTION(wx_mouse_event_button), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool button_down() const", asFUNCTION(wx_mouse_event_button_down), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool button_up() const", asFUNCTION(wx_mouse_event_button_up), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool button_dclick() const", asFUNCTION(wx_mouse_event_button_dclick), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool left_down() const", asMETHOD(wxMouseEvent, LeftDown), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool left_up() const", asMETHOD(wxMouseEvent, LeftUp), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool left_dclick() const", asMETHOD(wxMouseEvent, LeftDClick), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool middle_down() const", asMETHOD(wxMouseEvent, MiddleDown), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool middle_up() const", asMETHOD(wxMouseEvent, MiddleUp), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool middle_dclick() const", asMETHOD(wxMouseEvent, MiddleDClick), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool right_down() const", asMETHOD(wxMouseEvent, RightDown), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool right_up() const", asMETHOD(wxMouseEvent, RightUp), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool right_dclick() const", asMETHOD(wxMouseEvent, RightDClick), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool aux1_down() const", asMETHOD(wxMouseEvent, Aux1Down), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool aux1_up() const", asMETHOD(wxMouseEvent, Aux1Up), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool aux1_dclick() const", asMETHOD(wxMouseEvent, Aux1DClick), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool aux2_down() const", asMETHOD(wxMouseEvent, Aux2Down), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool aux2_up() const", asMETHOD(wxMouseEvent, Aux2Up), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool aux2_dclick() const", asMETHOD(wxMouseEvent, Aux2DClick), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool left_is_down() const", asFUNCTION(wx_mouse_event_left_is_down), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool middle_is_down() const", asFUNCTION(wx_mouse_event_middle_is_down), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool right_is_down() const", asFUNCTION(wx_mouse_event_right_is_down), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool aux1_is_down() const", asFUNCTION(wx_mouse_event_aux1_is_down), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool aux2_is_down() const", asFUNCTION(wx_mouse_event_aux2_is_down), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "int get_x() const", asFUNCTION(wx_mouse_event_get_x), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "int get_y() const", asFUNCTION(wx_mouse_event_get_y), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_mouse_event", "int get_wheel_rotation() const", asMETHOD(wxMouseEvent, GetWheelRotation), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "int get_wheel_delta() const", asMETHOD(wxMouseEvent, GetWheelDelta), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool dragging() const", asMETHOD(wxMouseEvent, Dragging), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool moving() const", asMETHOD(wxMouseEvent, Moving), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool entering() const", asMETHOD(wxMouseEvent, Entering), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_mouse_event", "bool leaving() const", asMETHOD(wxMouseEvent, Leaving), asCALL_THISCALL);
 
     engine->RegisterObjectMethod("wx_event", "wx_command_event@ opCast()", asFUNCTION(event_to_derived<wxCommandEvent>), asCALL_CDECL_OBJLAST);
     // get_int/set_int and get_string/set_string are registered as plain
@@ -484,24 +484,24 @@ void register_all_types(asIScriptEngine* engine) {
     // 'int' (a reserved AngelScript keyword) and 'string' (a registered
     // type name), neither of which is usable from script as obj.int /
     // obj.string.
-    engine->RegisterObjectMethod("wx_command_event", "int get_int() const", asMETHOD(wxCommandEvent, GetInt), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_command_event", "void set_int(int value)", asMETHOD(wxCommandEvent, SetInt), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_command_event", "int get_int() const", asFUNCTION(wx_command_event_get_int), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_command_event", "void set_int(int value)", asFUNCTION(wx_command_event_set_int), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_command_event", "int get_selection() const property", asMETHOD(wxCommandEvent, GetSelection), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_command_event", "string get_string() const", asFUNCTION(wx_command_event_get_string), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_command_event", "void set_string(const string &in value)", asFUNCTION(wx_command_event_set_string), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_command_event", "bool is_checked() const", asMETHOD(wxCommandEvent, IsChecked), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_command_event", "bool is_selection() const", asMETHOD(wxCommandEvent, IsSelection), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_command_event", "int get_extra_long() const property", asMETHOD(wxCommandEvent, GetExtraLong), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_command_event", "void set_extra_long(int value) property", asMETHOD(wxCommandEvent, SetExtraLong), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_command_event", "int get_extra_long() const property", asFUNCTION(wx_command_event_get_extra_long), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_command_event", "void set_extra_long(int value) property", asFUNCTION(wx_command_event_set_extra_long), asCALL_CDECL_OBJFIRST);
 
-    engine->RegisterObjectMethod("wx_sizer_item", "wx_window@ get_window()", asFUNCTION(wx_sizer_item_get_window), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_sizer_item", "wx_sizer@ get_sizer()", asFUNCTION(wx_sizer_item_get_sizer), asCALL_CDECL_OBJFIRST);
-    engine->RegisterObjectMethod("wx_sizer_item", "int get_proportion()", asMETHOD(wxSizerItem, GetProportion), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_sizer_item", "void set_proportion(int proportion)", asMETHOD(wxSizerItem, SetProportion), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_sizer_item", "int get_flag()", asMETHOD(wxSizerItem, GetFlag), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_sizer_item", "void set_flag(int flag)", asMETHOD(wxSizerItem, SetFlag), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_sizer_item", "int get_border()", asMETHOD(wxSizerItem, GetBorder), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx_sizer_item", "void set_border(int border)", asMETHOD(wxSizerItem, SetBorder), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_sizer_item", "wx_window@ get_window() const property", asFUNCTION(wx_sizer_item_get_window), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "wx_sizer@ get_sizer() const property", asFUNCTION(wx_sizer_item_get_sizer), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "int get_proportion() const property", asMETHOD(wxSizerItem, GetProportion), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_sizer_item", "void set_proportion(int proportion) property", asMETHOD(wxSizerItem, SetProportion), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_sizer_item", "int get_flag() const property", asMETHOD(wxSizerItem, GetFlag), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_sizer_item", "void set_flag(int flag) property", asMETHOD(wxSizerItem, SetFlag), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_sizer_item", "int get_border() const property", asMETHOD(wxSizerItem, GetBorder), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_sizer_item", "void set_border(int border) property", asMETHOD(wxSizerItem, SetBorder), asCALL_THISCALL);
 
     register_wx_manager(engine);
 }
