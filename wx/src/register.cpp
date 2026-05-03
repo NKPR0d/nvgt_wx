@@ -62,6 +62,40 @@ wx_colour& wx_colour_op_assign(wx_colour* self, const wx_colour& other) {
     return *self;
 }
 
+// ---------------------------------------------------------------------------
+// wxFont value-type adapters. wxFont is internally reference-counted, so
+// copy/destruct are cheap pointer operations and value-type semantics are
+// the right fit. The full ctor accepts `int` for family/style/weight so
+// the AS-side enums (registered as int enums) implicitly convert; the
+// helper casts back to the strongly-typed wx enums inside.
+// ---------------------------------------------------------------------------
+void wx_font_default_ctor(void* mem) {
+    new (mem) wxFont();
+}
+
+void wx_font_full_ctor(int point_size, int family, int style, int weight,
+                       bool underlined, const std::string& face_name, void* mem) {
+    new (mem) wxFont(point_size,
+                     static_cast<wxFontFamily>(family),
+                     static_cast<wxFontStyle>(style),
+                     static_cast<wxFontWeight>(weight),
+                     underlined,
+                     wxString::FromUTF8(face_name.c_str()));
+}
+
+void wx_font_copy_ctor(const wxFont& other, void* mem) {
+    new (mem) wxFont(other);
+}
+
+void wx_font_dtor(void* mem) {
+    static_cast<wxFont*>(mem)->~wxFont();
+}
+
+wxFont& wx_font_op_assign(wxFont* self, const wxFont& other) {
+    *self = other;
+    return *self;
+}
+
 void register_value_types(asIScriptEngine* engine) {
     // The class-trait flags are derived from `asGetTypeTraits<T>()`
     // rather than spelled out manually. This is the canonical AS pattern
@@ -157,6 +191,92 @@ void register_value_types(asIScriptEngine* engine) {
     engine->RegisterObjectProperty("wx_colour", "uint8 g", offsetof(wx_colour, g));
     engine->RegisterObjectProperty("wx_colour", "uint8 b", offsetof(wx_colour, b));
     engine->RegisterObjectProperty("wx_colour", "uint8 a", offsetof(wx_colour, a));
+
+    // wx_font: value-type wrapper around wxFont. wxFont's payload is a
+    // wxGDIObject pointer (reference-counted internally), so copies and
+    // destructions are pointer-cost and AS can manage the type by value
+    // without performance penalty. asGetTypeTraits<wxFont>() gives us
+    // CDAK (user-defined construct / destruct / assign / copy) which
+    // matches what wxFont actually provides.
+    engine->RegisterObjectType("wx_font", sizeof(wxFont),
+        asOBJ_VALUE | asGetTypeTraits<wxFont>());
+    engine->RegisterObjectBehaviour("wx_font", asBEHAVE_CONSTRUCT, "void f()",
+        asFUNCTION(wx_font_default_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_font",
+        asBEHAVE_CONSTRUCT,
+        "void f(int point_size, int family, int style, int weight, bool underlined = false, const string &in face_name = \"\")",
+        asFUNCTION(wx_font_full_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_font", asBEHAVE_CONSTRUCT, "void f(const wx_font &in)",
+        asFUNCTION(wx_font_copy_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_font", asBEHAVE_DESTRUCT, "void f()",
+        asFUNCTION(wx_font_dtor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectMethod("wx_font", "wx_font &opAssign(const wx_font &in)",
+        asFUNCTION(wx_font_op_assign), asCALL_CDECL_OBJFIRST);
+
+    // Properties.
+    engine->RegisterObjectMethod("wx_font", "int get_point_size() const property",
+        asMETHOD(wxFont, GetPointSize), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_font", "void set_point_size(int point_size) property",
+        asMETHODPR(wxFont, SetPointSize, (int), void), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_font", "wx_size get_pixel_size() const property",
+        asFUNCTION(wx_font_get_pixel_size), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_font", "void set_pixel_size(const wx_size &in size) property",
+        asFUNCTION(wx_font_set_pixel_size), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_font", "string get_face_name() const property",
+        asFUNCTION(wx_font_get_face_name), asCALL_CDECL_OBJFIRST);
+    // wxFont::SetFaceName returns bool, but AS property setters must
+    // return void (AngelScript rejects the registration otherwise). The
+    // wrapper in helpers.cpp drops the bool. Scripts that need the
+    // platform-acceptance signal can compare `font.face_name` against
+    // the requested string after the assignment.
+    engine->RegisterObjectMethod("wx_font", "void set_face_name(const string &in face) property",
+        asFUNCTION(wx_font_set_face_name), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_font", "int get_family() const property",
+        asFUNCTION(wx_font_get_family), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_font", "void set_family(int family) property",
+        asFUNCTION(wx_font_set_family), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_font", "int get_style() const property",
+        asFUNCTION(wx_font_get_style), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_font", "void set_style(int style) property",
+        asFUNCTION(wx_font_set_style), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_font", "int get_weight() const property",
+        asFUNCTION(wx_font_get_weight), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_font", "void set_weight(int weight) property",
+        asFUNCTION(wx_font_set_weight), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_font", "bool get_underlined() const property",
+        asMETHOD(wxFont, GetUnderlined), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_font", "void set_underlined(bool underlined) property",
+        asMETHOD(wxFont, SetUnderlined), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_font", "bool get_strikethrough() const property",
+        asMETHOD(wxFont, GetStrikethrough), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_font", "void set_strikethrough(bool strikethrough) property",
+        asMETHOD(wxFont, SetStrikethrough), asCALL_THISCALL);
+
+    // Plain methods (no property keyword) for the queries that have no
+    // setter counterpart and the modifier methods that return a fresh
+    // wxFont with one attribute changed.
+    engine->RegisterObjectMethod("wx_font", "bool is_ok() const",
+        asMETHOD(wxFont, IsOk), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_font", "bool is_fixed_width() const",
+        asMETHOD(wxFont, IsFixedWidth), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_font", "wx_font bold() const",
+        asFUNCTION(wx_font_bold), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_font", "wx_font italic() const",
+        asFUNCTION(wx_font_italic), asCALL_CDECL_OBJFIRST);
+    // wxFont::Underlined()/Strikethrough() are intentionally NOT exposed
+    // as `font.underlined()` / `font.strikethrough()` on the AS side
+    // because they would collide with the same-named bool property
+    // (`font.underlined = true;`). Scripts that need a copy can do
+    // `wx_font copy = font; copy.underlined = true;` — one extra line for
+    // an unambiguous parse.
+    engine->RegisterObjectMethod("wx_font", "wx_font larger() const",
+        asFUNCTION(wx_font_larger), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_font", "wx_font smaller() const",
+        asFUNCTION(wx_font_smaller), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_font", "wx_font scaled(float factor) const",
+        asFUNCTION(wx_font_scaled), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_font", "wx_font get_base_font() const",
+        asFUNCTION(wx_font_get_base_font), asCALL_CDECL_OBJFIRST);
 }
 
 // ---------------------------------------------------------------------------
@@ -219,6 +339,8 @@ void register_value_types(asIScriptEngine* engine) {
     engine->RegisterObjectMethod(name, "void set_background_colour(const wx_colour &in colour) property", asFUNCTION(wx_window_set_background_colour), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "wx_colour get_foreground_colour() const property", asFUNCTION(wx_window_get_foreground_colour), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_foreground_colour(const wx_colour &in colour) property", asFUNCTION(wx_window_set_foreground_colour), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_font get_font() const property", asFUNCTION(wx_window_get_font), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_font(const wx_font &in font) property", asFUNCTION(wx_window_set_font), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "wx_sizer@ get_sizer() const property", asFUNCTION(wx_window_get_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_sizer(wx_sizer@) property", asFUNCTION(wx_window_set_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "wx_window@ get_parent() const property", asFUNCTION(wx_window_get_parent), asCALL_CDECL_OBJFIRST); \
@@ -661,6 +783,37 @@ void register_all_types(asIScriptEngine* engine) {
     engine->RegisterEnumValue("wx_navigation", "WX_NAVIGATION_FORWARD", 1);
     engine->RegisterEnumValue("wx_navigation", "WX_NAVIGATION_BACKWARD", 2);
     engine->RegisterEnumValue("wx_navigation", "WX_NAVIGATION_TABBING", 4);
+
+    // Font enums. Names match the wxWidgets C++ constants 1:1; the
+    // underlying values are stable across wx releases (used in serialized
+    // config files), so propagating the wx values straight through is
+    // safe.
+    engine->RegisterEnum("wx_font_family");
+    engine->RegisterEnumValue("wx_font_family", "WX_FONTFAMILY_DEFAULT", wxFONTFAMILY_DEFAULT);
+    engine->RegisterEnumValue("wx_font_family", "WX_FONTFAMILY_DECORATIVE", wxFONTFAMILY_DECORATIVE);
+    engine->RegisterEnumValue("wx_font_family", "WX_FONTFAMILY_ROMAN", wxFONTFAMILY_ROMAN);
+    engine->RegisterEnumValue("wx_font_family", "WX_FONTFAMILY_SCRIPT", wxFONTFAMILY_SCRIPT);
+    engine->RegisterEnumValue("wx_font_family", "WX_FONTFAMILY_SWISS", wxFONTFAMILY_SWISS);
+    engine->RegisterEnumValue("wx_font_family", "WX_FONTFAMILY_MODERN", wxFONTFAMILY_MODERN);
+    engine->RegisterEnumValue("wx_font_family", "WX_FONTFAMILY_TELETYPE", wxFONTFAMILY_TELETYPE);
+    engine->RegisterEnumValue("wx_font_family", "WX_FONTFAMILY_UNKNOWN", wxFONTFAMILY_UNKNOWN);
+
+    engine->RegisterEnum("wx_font_style");
+    engine->RegisterEnumValue("wx_font_style", "WX_FONTSTYLE_NORMAL", wxFONTSTYLE_NORMAL);
+    engine->RegisterEnumValue("wx_font_style", "WX_FONTSTYLE_ITALIC", wxFONTSTYLE_ITALIC);
+    engine->RegisterEnumValue("wx_font_style", "WX_FONTSTYLE_SLANT", wxFONTSTYLE_SLANT);
+
+    engine->RegisterEnum("wx_font_weight");
+    engine->RegisterEnumValue("wx_font_weight", "WX_FONTWEIGHT_THIN", wxFONTWEIGHT_THIN);
+    engine->RegisterEnumValue("wx_font_weight", "WX_FONTWEIGHT_EXTRALIGHT", wxFONTWEIGHT_EXTRALIGHT);
+    engine->RegisterEnumValue("wx_font_weight", "WX_FONTWEIGHT_LIGHT", wxFONTWEIGHT_LIGHT);
+    engine->RegisterEnumValue("wx_font_weight", "WX_FONTWEIGHT_NORMAL", wxFONTWEIGHT_NORMAL);
+    engine->RegisterEnumValue("wx_font_weight", "WX_FONTWEIGHT_MEDIUM", wxFONTWEIGHT_MEDIUM);
+    engine->RegisterEnumValue("wx_font_weight", "WX_FONTWEIGHT_SEMIBOLD", wxFONTWEIGHT_SEMIBOLD);
+    engine->RegisterEnumValue("wx_font_weight", "WX_FONTWEIGHT_BOLD", wxFONTWEIGHT_BOLD);
+    engine->RegisterEnumValue("wx_font_weight", "WX_FONTWEIGHT_EXTRABOLD", wxFONTWEIGHT_EXTRABOLD);
+    engine->RegisterEnumValue("wx_font_weight", "WX_FONTWEIGHT_HEAVY", wxFONTWEIGHT_HEAVY);
+    engine->RegisterEnumValue("wx_font_weight", "WX_FONTWEIGHT_EXTRAHEAVY", wxFONTWEIGHT_EXTRAHEAVY);
 
     register_key_codes(engine);
 

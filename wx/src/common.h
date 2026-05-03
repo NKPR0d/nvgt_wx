@@ -23,6 +23,7 @@
 
 #include <wx/wx.h>
 #include <wx/evtloop.h>
+#include <wx/font.h>
 
 // nvgt_plugin.h emits *definitions* of plugin_version() and the
 // asGetLibraryVersion / asAcquireExclusiveLock / nvgt_wait / ... function
@@ -273,6 +274,15 @@ wxSizer* wx_window_get_sizer(wxWindow* self);
 void wx_window_set_sizer(wxWindow* self, wxSizer* sizer);
 void wx_window_refresh(wxWindow* self);
 
+// Font property. wxFont is exposed to AS as a value type (`wx_font`) in
+// register.cpp; the get/set wrappers are needed because wxWindow::SetFont
+// returns bool (which would force the property setter to be void via the
+// usual property-setter rule, but here we also want to discard the bool
+// silently — the script use-case for "did the platform accept the font"
+// is too narrow to be worth widening the API surface for).
+wxFont wx_window_get_font(wxWindow* self);
+void wx_window_set_font(wxWindow* self, const wxFont& font);
+
 // wxWindow::ScrollWindow takes a `const wxRect* = nullptr` last parameter
 // that is dereferenced unconditionally on MSW; pass nullptr explicitly.
 void wx_window_scroll_window(wxWindow* self, int dx, int dy);
@@ -433,6 +443,58 @@ wxRadioButton* wx_radio_button_get_first_in_group(wxRadioButton* self);
 wxRadioButton* wx_radio_button_get_last_in_group(wxRadioButton* self);
 wxRadioButton* wx_radio_button_get_next_in_group(wxRadioButton* self);
 wxRadioButton* wx_radio_button_get_previous_in_group(wxRadioButton* self);
+
+// ---------------------------------------------------------------------------
+// wxFont adapters (helpers.cpp). wxFont is exposed as a value type
+// (`wx_font`) on the AngelScript side; the C++ wxFont is internally
+// reference-counted (wxGDIObject), so copy/destruct are cheap pointer
+// operations and value-type semantics are appropriate.
+//
+// Property accessors covered here that need wrapping:
+//   * `face_name`           — wxString <-> std::string conversion;
+//   * `family`/`style`/`weight` — wx*Family/Style/Weight enums need to
+//     be cast through int because AngelScript registers them as `int`
+//     enums and forwarding a strongly-typed enum across the boundary
+//     would force a templated trampoline per enum type;
+//   * `pixel_size`          — returns wx_size by value.
+//
+// The modifier methods (Bold, Italic, …) are wrapped because the wx
+// macro `wxDECLARE_COMMON_FONT_METHODS` declares them inside `wxFont`
+// (after expansion), but they are inherited from `wxFontBase`. asMETHOD
+// resolution prefers the most-derived declaration, which on at least
+// MSVC produces an ambiguous overload set when the same name appears
+// on both base and derived. Going through free wrappers avoids the
+// ambiguity and gives us a single binding site.
+// ---------------------------------------------------------------------------
+std::string wx_font_get_face_name(const wxFont* self);
+// SetFaceName returns bool to signal "platform recognised the font name";
+// AngelScript property setters must return void, so the property form
+// drops the bool. Scripts that need it can compare `font.face_name`
+// against the requested string after assignment.
+void wx_font_set_face_name(wxFont* self, const std::string& face);
+int wx_font_get_family(const wxFont* self);
+void wx_font_set_family(wxFont* self, int family);
+int wx_font_get_style(const wxFont* self);
+void wx_font_set_style(wxFont* self, int style);
+int wx_font_get_weight(const wxFont* self);
+void wx_font_set_weight(wxFont* self, int weight);
+wx_size wx_font_get_pixel_size(const wxFont* self);
+void wx_font_set_pixel_size(wxFont* self, const wx_size& size);
+
+// Note: only the modifier methods that don't collide with a same-named
+// property are exposed. wxFont's `Underlined()` and `Strikethrough()`
+// return a fresh wxFont with the bool attribute toggled, but AS-side
+// `font.underlined`/`font.strikethrough` are already exposed as
+// settable properties — registering the modifier under the same name
+// would either shadow the property or be ambiguous to the parser.
+// Scripts can write `wx_font copy = font; copy.underlined = true;` to
+// achieve the same result with one extra line.
+wxFont wx_font_bold(const wxFont* self);
+wxFont wx_font_italic(const wxFont* self);
+wxFont wx_font_larger(const wxFont* self);
+wxFont wx_font_smaller(const wxFont* self);
+wxFont wx_font_scaled(const wxFont* self, float factor);
+wxFont wx_font_get_base_font(const wxFont* self);
 
 // ---------------------------------------------------------------------------
 // WxManager registration (manager.cpp). The class definition is private to

@@ -344,6 +344,19 @@ void wx_window_set_extra_style(wxWindow* self, int style) {
     if (self) self->SetExtraStyle(static_cast<long>(style));
 }
 
+// wxWindow::SetFont returns bool to signal whether the platform accepted
+// the font; the wrapper drops it for the property-setter form (AS
+// property setters must return void). Scripts that need the rarely-useful
+// "did the platform like this font" answer can compare the script-side
+// font with what `win.font` returns afterwards.
+wxFont wx_window_get_font(wxWindow* self) {
+    return self ? self->GetFont() : wxFont();
+}
+
+void wx_window_set_font(wxWindow* self, const wxFont& font) {
+    if (self) self->SetFont(font);
+}
+
 // ---------------------------------------------------------------------------
 // wxControl.
 // ---------------------------------------------------------------------------
@@ -924,4 +937,93 @@ wxRadioButton* wx_radio_button_get_previous_in_group(wxRadioButton* self) {
     wxRadioButton* rb = self ? self->GetPreviousInGroup() : nullptr;
     if (rb) AddRef(rb);
     return rb;
+}
+
+// ---------------------------------------------------------------------------
+// wxFont. Exposed on the AngelScript side as a value type (`wx_font`).
+// All wrappers null-check `self` so a default-constructed wx_font that
+// failed to back itself with a real font (e.g. `wx_font(0, ...)`) does
+// not crash the bridge. wxFont's accessors are declared in wxFontBase
+// (the platform-agnostic base) and inherited by wxFont; calling them
+// through the derived pointer is safe and matches the wx documented API.
+// ---------------------------------------------------------------------------
+std::string wx_font_get_face_name(const wxFont* self) {
+    return self ? std::string(self->GetFaceName().utf8_str()) : "";
+}
+
+// wxFont::SetFaceName returns bool to signal whether the platform
+// accepted the face name, but AS property setters must return void.
+// Drop the bool on the bridge — scripts that care can compare
+// `font.face_name` against the requested string after assignment.
+void wx_font_set_face_name(wxFont* self, const std::string& face) {
+    if (self) self->SetFaceName(wxString::FromUTF8(face.c_str()));
+}
+
+// wx*Family/Style/Weight are strongly-typed enums in C++; AngelScript
+// registers them as plain `int` enums and passes them via int across the
+// boundary. Cast through int explicitly so the AS signature stays
+// portable across ABIs (the underlying enum type is implementation-
+// defined; on some compilers it is `unsigned int`, on others it is
+// derived from `int`).
+int wx_font_get_family(const wxFont* self) {
+    return self ? static_cast<int>(self->GetFamily()) : 0;
+}
+
+void wx_font_set_family(wxFont* self, int family) {
+    if (self) self->SetFamily(static_cast<wxFontFamily>(family));
+}
+
+int wx_font_get_style(const wxFont* self) {
+    return self ? static_cast<int>(self->GetStyle()) : 0;
+}
+
+void wx_font_set_style(wxFont* self, int style) {
+    if (self) self->SetStyle(static_cast<wxFontStyle>(style));
+}
+
+int wx_font_get_weight(const wxFont* self) {
+    return self ? static_cast<int>(self->GetWeight()) : 0;
+}
+
+void wx_font_set_weight(wxFont* self, int weight) {
+    if (self) self->SetWeight(static_cast<wxFontWeight>(weight));
+}
+
+wx_size wx_font_get_pixel_size(const wxFont* self) {
+    return self ? self->GetPixelSize() : wxSize(0, 0);
+}
+
+void wx_font_set_pixel_size(wxFont* self, const wx_size& size) {
+    if (self) self->SetPixelSize(size);
+}
+
+// Modifier methods (`Bold`, `Italic`, …) come from the wxFontBase macro
+// `wxDECLARE_COMMON_FONT_METHODS`, expanded inside wxFont. They return
+// a fresh wxFont by value with the modification applied; because wxFont
+// is internally reference-counted, the returned object is the size of a
+// single pointer. Wrap in free functions for asMETHOD-binding clarity
+// and to give us a stable C-callable address (asMETHOD on wx-macro-
+// expanded names occasionally trips up MSVC's overload resolution).
+wxFont wx_font_bold(const wxFont* self) {
+    return self ? self->Bold() : wxFont();
+}
+
+wxFont wx_font_italic(const wxFont* self) {
+    return self ? self->Italic() : wxFont();
+}
+
+wxFont wx_font_larger(const wxFont* self) {
+    return self ? self->Larger() : wxFont();
+}
+
+wxFont wx_font_smaller(const wxFont* self) {
+    return self ? self->Smaller() : wxFont();
+}
+
+wxFont wx_font_scaled(const wxFont* self, float factor) {
+    return self ? self->Scaled(factor) : wxFont();
+}
+
+wxFont wx_font_get_base_font(const wxFont* self) {
+    return self ? self->GetBaseFont() : wxFont();
 }

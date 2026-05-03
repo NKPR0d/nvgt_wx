@@ -4,6 +4,15 @@
 // the bridge exposes. Everything in this file is private to the
 // translation unit except register_wx_manager(), which register.cpp calls
 // into to register the type and its methods on the AngelScript engine.
+//
+// wxEntryCleanup() is paired with wxEntryStart() through a static guard
+// (`g_wx_lifecycle`, below). The guard's destructor runs at C++ static
+// deinitialisation — on Windows that fires from DllMain on
+// DLL_PROCESS_DETACH, after AngelScript has released every wx object,
+// which is the safe moment to tear wx down. Pairing it with the
+// WxManager destructor instead would be wrong: WxManager is a value
+// type, and a script that lets `wx` go out of scope while wx-windows are
+// still alive would otherwise nuke wxApp under them.
 
 #include "common.h"
 
@@ -18,6 +27,27 @@ public:
     bool OnInit() override { return true; }
 };
 
+// Tracks whether *this plugin* started wxWidgets. NVGT itself does not
+// run a wxApp, so under normal use this flips to true on the first
+// WxManager() constructor call. If a future host pre-creates a wxApp,
+// the plugin defers to it and the lifecycle guard below stays a no-op.
+bool g_wx_started_by_plugin = false;
+
+class WxLifecycleGuard {
+public:
+    WxLifecycleGuard() = default;
+    ~WxLifecycleGuard() {
+        if (g_wx_started_by_plugin && wxTheApp) {
+            // Drain anything wxWidgets queued during teardown so
+            // wxEntryCleanup sees a quiescent message pump.
+            wxTheApp->ProcessPendingEvents();
+            wxEntryCleanup();
+            g_wx_started_by_plugin = false;
+        }
+    }
+};
+WxLifecycleGuard g_wx_lifecycle;
+
 class WxManager {
 public:
     WxManager() {
@@ -27,6 +57,7 @@ public:
             char** argv = nullptr;
             wxEntryStart(argc, argv);
             wxTheApp->CallOnInit();
+            g_wx_started_by_plugin = true;
         }
     }
 
