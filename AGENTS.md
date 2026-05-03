@@ -478,8 +478,12 @@ dangling pointer the bridge cannot rescue.
 - `WxManager` must be registered with `asOBJ_VALUE | asOBJ_APP_CLASS_CD`
   (it has a non-trivial constructor and destructor); `asOBJ_POD` is
   incorrect.
-- `wxEntryCleanup()` is currently not called. If the plugin ever gains
-  a real shutdown hook it should be invoked there.
+- `wxEntryCleanup()` is paired with `wxEntryStart()` through the
+  static `WxLifecycleGuard` (`g_wx_lifecycle` in `manager.cpp`). Its
+  destructor fires at C++ static deinitialisation — on Windows from
+  `DllMain` on `DLL_PROCESS_DETACH` — after every wx object the
+  bridge handed out has been released. See *WxManager* above for why
+  pairing the cleanup with `~WxManager()` would be wrong.
 - **`asMETHOD` does not propagate C++ default arguments.** If the
   underlying C++ method has defaulted parameters and the AngelScript
   signature omits them, the C++ function still expects all parameters

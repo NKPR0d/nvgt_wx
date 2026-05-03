@@ -9,10 +9,17 @@
 // ---------------------------------------------------------------------------
 // wxEvent base.
 // ---------------------------------------------------------------------------
+// Bridge-side handle for the window that fired the event. Most events
+// originate from a script-created widget (already tracked through
+// Track<T>), but a wxWidgets-internal sub-window can also surface here
+// — e.g. a paint event on a control's child whose lifetime the bridge
+// has not seen before. EnsureTracked binds the wxEVT_DESTROY hook on
+// first sight so the entry cannot outlive the underlying object; on
+// already-tracked windows it is just an AddRef.
 wxWindow* wx_event_get_event_object(wxEvent* self) {
+    if (!self) return nullptr;
     wxWindow* win = dynamic_cast<wxWindow*>(self->GetEventObject());
-    if (win) AddRef(win);
-    return win;
+    return EnsureTracked(win);
 }
 
 // ---------------------------------------------------------------------------
@@ -415,10 +422,16 @@ bool wx_tlw_show_full_screen(wxTopLevelWindow* self, bool show) {
 }
 
 // ---------------------------------------------------------------------------
-// wxSizer. Spacer-returning wrappers do not AddRef the sizer item: spacers
-// are owned by the sizer and the script-side handle is best left as a
-// transient view (matching how Add(window,...) does not return anything).
-// Add/Insert/Prepend without a return value mirror the existing pattern.
+// wxSizer. Add/Insert/Prepend overloads that take a window or sub-sizer
+// do not return a wxSizerItem* on the AS side: scripts can recover the
+// item with `get_item(...)` afterwards if they need it, and the more
+// common idiom is `sizer.add(button, ...)` without juggling a sizer-item
+// handle. Spacer overloads, in contrast, return the wxSizerItem so the
+// script can tweak the proportion later; those wrappers AddRef the
+// returned item so the wx_sizer_item bridge type (registered with the
+// custom AddRef/Release) sees a balanced refcount. The item lives in
+// the sizer's child list; CleanupSizerEntries strips it from
+// g_ref_counts before the wxSizer destructor runs.
 // ---------------------------------------------------------------------------
 void wx_sizer_add_window(wxSizer* self, wxWindow* window, int proportion, int flag, int border) {
     if (self && window) self->Add(window, proportion, flag, border);
@@ -1120,28 +1133,33 @@ bool wx_text_entry_auto_complete_directories(wxWindow* self) {
 // ---------------------------------------------------------------------------
 // wxRadioButton.
 // ---------------------------------------------------------------------------
+// Sibling navigation on wxRadioButton walks a group of buttons whose
+// individual lifetimes the bridge may not have seen yet — a script can
+// reach a sibling that was assembled from a layout helper rather than
+// produced by `wx.create_radio_button(...)`. Use EnsureTracked rather
+// than bare AddRef so the wxEVT_DESTROY hook is wired the first time
+// the bridge sees each sibling; otherwise an untracked button would
+// leave a stale entry in g_ref_counts after wxWidgets destroys it, and
+// the eventual Release() could call Destroy() on a window the bridge
+// does not own. See AGENTS.md "Reference counting" for the full rule.
 wxRadioButton* wx_radio_button_get_first_in_group(wxRadioButton* self) {
     wxRadioButton* rb = self ? self->GetFirstInGroup() : nullptr;
-    if (rb) AddRef(rb);
-    return rb;
+    return EnsureTracked(rb);
 }
 
 wxRadioButton* wx_radio_button_get_last_in_group(wxRadioButton* self) {
     wxRadioButton* rb = self ? self->GetLastInGroup() : nullptr;
-    if (rb) AddRef(rb);
-    return rb;
+    return EnsureTracked(rb);
 }
 
 wxRadioButton* wx_radio_button_get_next_in_group(wxRadioButton* self) {
     wxRadioButton* rb = self ? self->GetNextInGroup() : nullptr;
-    if (rb) AddRef(rb);
-    return rb;
+    return EnsureTracked(rb);
 }
 
 wxRadioButton* wx_radio_button_get_previous_in_group(wxRadioButton* self) {
     wxRadioButton* rb = self ? self->GetPreviousInGroup() : nullptr;
-    if (rb) AddRef(rb);
-    return rb;
+    return EnsureTracked(rb);
 }
 
 // ---------------------------------------------------------------------------
