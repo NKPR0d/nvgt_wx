@@ -730,6 +730,211 @@ void wx_sizer_item_delete_windows(wxSizerItem* self) {
 }
 
 // ---------------------------------------------------------------------------
+// wxGridSizer.
+// ---------------------------------------------------------------------------
+int wx_grid_sizer_get_effective_cols_count(wxGridSizer* self) {
+    return self ? self->GetEffectiveColsCount() : 0;
+}
+
+int wx_grid_sizer_get_effective_rows_count(wxGridSizer* self) {
+    return self ? self->GetEffectiveRowsCount() : 0;
+}
+
+void wx_grid_sizer_calc_rows_cols(wxGridSizer* self, int& rows, int& cols) {
+    if (self) self->CalcRowsCols(rows, cols);
+}
+
+// ---------------------------------------------------------------------------
+// wxFlexGridSizer. wxWidgets' AddGrowableRow/Col take size_t and a
+// proportion that defaults to 0; the index-typed AS-side is `int`, so
+// negative values are clamped at 0 to avoid implementation-defined
+// signed-to-unsigned conversion. The non-flexible-grow-mode property
+// is bound through wrappers because asMETHOD on the strongly-typed
+// wxFlexSizerGrowMode enum forces a templated trampoline per enum,
+// which we already dodged for wxFontFamily/Style/Weight in Phase 0.
+// ---------------------------------------------------------------------------
+void wx_flex_grid_sizer_add_growable_row(wxFlexGridSizer* self, int idx, int proportion) {
+    if (self && idx >= 0) self->AddGrowableRow(static_cast<size_t>(idx), proportion);
+}
+
+void wx_flex_grid_sizer_remove_growable_row(wxFlexGridSizer* self, int idx) {
+    if (self && idx >= 0) self->RemoveGrowableRow(static_cast<size_t>(idx));
+}
+
+void wx_flex_grid_sizer_add_growable_col(wxFlexGridSizer* self, int idx, int proportion) {
+    if (self && idx >= 0) self->AddGrowableCol(static_cast<size_t>(idx), proportion);
+}
+
+void wx_flex_grid_sizer_remove_growable_col(wxFlexGridSizer* self, int idx) {
+    if (self && idx >= 0) self->RemoveGrowableCol(static_cast<size_t>(idx));
+}
+
+bool wx_flex_grid_sizer_is_row_growable(wxFlexGridSizer* self, int idx) {
+    return (self && idx >= 0) ? self->IsRowGrowable(static_cast<size_t>(idx)) : false;
+}
+
+bool wx_flex_grid_sizer_is_col_growable(wxFlexGridSizer* self, int idx) {
+    return (self && idx >= 0) ? self->IsColGrowable(static_cast<size_t>(idx)) : false;
+}
+
+int wx_flex_grid_sizer_get_non_flexible_grow_mode(wxFlexGridSizer* self) {
+    return self ? static_cast<int>(self->GetNonFlexibleGrowMode()) : 0;
+}
+
+void wx_flex_grid_sizer_set_non_flexible_grow_mode(wxFlexGridSizer* self, int mode) {
+    if (self) self->SetNonFlexibleGrowMode(static_cast<wxFlexSizerGrowMode>(mode));
+}
+
+// ---------------------------------------------------------------------------
+// wxGridBagSizer. The AS-side `add(...)` overloads do not return the
+// wxSizerItem* — same convention as wxSizer's add wrappers, so a script
+// can write `gb.add(button, wx_gb_position(0, 0));` without dealing with
+// a sizer-item handle. Scripts that need the item back can call
+// `find_item(button)` afterwards. wxObject* userData is intentionally
+// not exposed on the AS side because the bridge has no mechanism for
+// passing arbitrary script handles through wxObject.
+// ---------------------------------------------------------------------------
+void wx_grid_bag_sizer_add_window(wxGridBagSizer* self, wxWindow* win,
+                                  const wx_gb_position& pos, const wx_gb_span& span,
+                                  int flag, int border) {
+    if (self && win) self->Add(win, to_wx(pos), to_wx(span), flag, border);
+}
+
+void wx_grid_bag_sizer_add_sizer(wxGridBagSizer* self, wxSizer* sizer,
+                                 const wx_gb_position& pos, const wx_gb_span& span,
+                                 int flag, int border) {
+    if (self && sizer) self->Add(sizer, to_wx(pos), to_wx(span), flag, border);
+}
+
+void wx_grid_bag_sizer_add_spacer(wxGridBagSizer* self, int width, int height,
+                                  const wx_gb_position& pos, const wx_gb_span& span,
+                                  int flag, int border) {
+    if (self) self->Add(width, height, to_wx(pos), to_wx(span), flag, border);
+}
+
+wx_size wx_grid_bag_sizer_get_empty_cell_size(wxGridBagSizer* self) {
+    return self ? self->GetEmptyCellSize() : wxSize(0, 0);
+}
+
+void wx_grid_bag_sizer_set_empty_cell_size(wxGridBagSizer* self, const wx_size& s) {
+    if (self) self->SetEmptyCellSize(s);
+}
+
+wx_size wx_grid_bag_sizer_get_cell_size(wxGridBagSizer* self, int row, int col) {
+    return self ? self->GetCellSize(row, col) : wxSize(0, 0);
+}
+
+wx_gb_position wx_grid_bag_sizer_get_item_position_window(wxGridBagSizer* self, wxWindow* win) {
+    return (self && win) ? from_wx(self->GetItemPosition(win)) : wx_gb_position{0, 0};
+}
+
+wx_gb_position wx_grid_bag_sizer_get_item_position_sizer(wxGridBagSizer* self, wxSizer* s) {
+    return (self && s) ? from_wx(self->GetItemPosition(s)) : wx_gb_position{0, 0};
+}
+
+wx_gb_position wx_grid_bag_sizer_get_item_position_index(wxGridBagSizer* self, int index) {
+    return (self && index >= 0)
+        ? from_wx(self->GetItemPosition(static_cast<size_t>(index)))
+        : wx_gb_position{0, 0};
+}
+
+bool wx_grid_bag_sizer_set_item_position_window(wxGridBagSizer* self, wxWindow* win,
+                                                const wx_gb_position& pos) {
+    return (self && win) ? self->SetItemPosition(win, to_wx(pos)) : false;
+}
+
+bool wx_grid_bag_sizer_set_item_position_sizer(wxGridBagSizer* self, wxSizer* s,
+                                               const wx_gb_position& pos) {
+    return (self && s) ? self->SetItemPosition(s, to_wx(pos)) : false;
+}
+
+bool wx_grid_bag_sizer_set_item_position_index(wxGridBagSizer* self, int index,
+                                               const wx_gb_position& pos) {
+    return (self && index >= 0)
+        ? self->SetItemPosition(static_cast<size_t>(index), to_wx(pos))
+        : false;
+}
+
+wx_gb_span wx_grid_bag_sizer_get_item_span_window(wxGridBagSizer* self, wxWindow* win) {
+    return (self && win) ? from_wx(self->GetItemSpan(win)) : wx_gb_span{1, 1};
+}
+
+wx_gb_span wx_grid_bag_sizer_get_item_span_sizer(wxGridBagSizer* self, wxSizer* s) {
+    return (self && s) ? from_wx(self->GetItemSpan(s)) : wx_gb_span{1, 1};
+}
+
+wx_gb_span wx_grid_bag_sizer_get_item_span_index(wxGridBagSizer* self, int index) {
+    return (self && index >= 0)
+        ? from_wx(self->GetItemSpan(static_cast<size_t>(index)))
+        : wx_gb_span{1, 1};
+}
+
+bool wx_grid_bag_sizer_set_item_span_window(wxGridBagSizer* self, wxWindow* win,
+                                            const wx_gb_span& span) {
+    return (self && win) ? self->SetItemSpan(win, to_wx(span)) : false;
+}
+
+bool wx_grid_bag_sizer_set_item_span_sizer(wxGridBagSizer* self, wxSizer* s,
+                                           const wx_gb_span& span) {
+    return (self && s) ? self->SetItemSpan(s, to_wx(span)) : false;
+}
+
+bool wx_grid_bag_sizer_set_item_span_index(wxGridBagSizer* self, int index,
+                                           const wx_gb_span& span) {
+    return (self && index >= 0)
+        ? self->SetItemSpan(static_cast<size_t>(index), to_wx(span))
+        : false;
+}
+
+wxSizerItem* wx_grid_bag_sizer_find_item_window(wxGridBagSizer* self, wxWindow* win) {
+    if (!self || !win) return nullptr;
+    wxSizerItem* item = self->FindItem(win);
+    if (item) AddRef(item);
+    return item;
+}
+
+wxSizerItem* wx_grid_bag_sizer_find_item_sizer(wxGridBagSizer* self, wxSizer* s) {
+    if (!self || !s) return nullptr;
+    wxSizerItem* item = self->FindItem(s);
+    if (item) AddRef(item);
+    return item;
+}
+
+wxSizerItem* wx_grid_bag_sizer_find_item_at_position(wxGridBagSizer* self,
+                                                    const wx_gb_position& pos) {
+    if (!self) return nullptr;
+    wxSizerItem* item = self->FindItemAtPosition(to_wx(pos));
+    if (item) AddRef(item);
+    return item;
+}
+
+wxSizerItem* wx_grid_bag_sizer_find_item_at_point(wxGridBagSizer* self, const wx_point& pt) {
+    if (!self) return nullptr;
+    wxSizerItem* item = self->FindItemAtPoint(pt);
+    if (item) AddRef(item);
+    return item;
+}
+
+bool wx_grid_bag_sizer_check_for_intersection_pos(wxGridBagSizer* self,
+                                                  const wx_gb_position& pos,
+                                                  const wx_gb_span& span) {
+    return self ? self->CheckForIntersection(to_wx(pos), to_wx(span), nullptr) : false;
+}
+
+// ---------------------------------------------------------------------------
+// wxStaticBoxSizer. The static box returned by GetStaticBox is owned by
+// the parent window and lives for the duration of the static-box-sizer's
+// life; EnsureTracked binds wxEVT_DESTROY on first sight so a stale entry
+// in g_ref_counts cannot survive the parent's destruction.
+// ---------------------------------------------------------------------------
+wxStaticBox* wx_static_box_sizer_get_static_box(wxStaticBoxSizer* self) {
+    if (!self) return nullptr;
+    wxStaticBox* box = self->GetStaticBox();
+    if (box) EnsureTracked(box);
+    return box;
+}
+
+// ---------------------------------------------------------------------------
 // wxTextEntry. The control side of wxTextEntry is a mix-in, so the wrappers
 // take a wxWindow* and dynamic_cast it to wxTextEntry. This lets the same
 // REG_TEXT_ENTRY_METHODS macro register the API on every concrete type

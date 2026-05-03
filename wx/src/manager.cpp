@@ -90,6 +90,77 @@ public:
         return b;
     }
 
+    // wxGridSizer ctor variants. The plugin exposes the (rows, cols, vgap, hgap)
+    // form because it covers everything the (cols, vgap, hgap) and (cols, gap)
+    // forms do (pass rows=0 for "auto-derive"); collapsing them into a single
+    // factory keeps the AS-side surface unambiguous and lets argument defaults
+    // work without overload resolution.
+    wxGridSizer* create_grid_sizer(int rows, int cols, int vgap = 0, int hgap = 0) {
+        wxGridSizer* s = new wxGridSizer(rows, cols, vgap, hgap);
+        AddRef(s);
+        return s;
+    }
+
+    // wxFlexGridSizer mirrors the wxGridSizer ctor form. Flexible-direction
+    // and non-flexible-grow-mode are runtime properties; scripts set them
+    // after construction via the registered methods.
+    wxFlexGridSizer* create_flex_grid_sizer(int rows, int cols, int vgap = 0, int hgap = 0) {
+        wxFlexGridSizer* s = new wxFlexGridSizer(rows, cols, vgap, hgap);
+        AddRef(s);
+        return s;
+    }
+
+    // wxGridBagSizer's only ctor takes vgap and hgap (note the wx parameter
+    // order is (vgap, hgap) — opposite of how grid_sizer's ctor parameters
+    // are listed in the wx documentation table). Items are added through
+    // Add(window, wxGBPosition, wxGBSpan, …) overloads, registered as
+    // gb.add(...) on the AS side.
+    wxGridBagSizer* create_grid_bag_sizer(int vgap = 0, int hgap = 0) {
+        wxGridBagSizer* s = new wxGridBagSizer(vgap, hgap);
+        AddRef(s);
+        return s;
+    }
+
+    // wxWrapSizer takes an orientation and a flag bitmask. The wx default for
+    // flags is wxWRAPSIZER_DEFAULT_FLAGS (extend-last + remove-leading-spaces),
+    // which is what scripts almost always want; expose it as the AS-side
+    // default so `wx.create_wrap_sizer(WX_HORIZONTAL)` does the right thing.
+    wxWrapSizer* create_wrap_sizer(int orient = wxHORIZONTAL,
+                                   int flags = wxWRAPSIZER_DEFAULT_FLAGS) {
+        wxWrapSizer* s = new wxWrapSizer(orient, flags);
+        AddRef(s);
+        return s;
+    }
+
+    // wxStaticBox is registered as a control even though scripts most often
+    // never reference it by handle: wxStaticBoxSizer takes an existing box
+    // (first ctor form) or creates one internally (second ctor form). The
+    // factory exists so a script that wants the first form can build the
+    // box up-front and re-use it.
+    wxStaticBox* create_static_box(wxWindow* parent, const std::string& label, long style = 0) {
+        wxString wx_s = wxString::FromUTF8(label.c_str());
+        return Track(new wxStaticBox(parent, wxID_ANY, wx_s, wxDefaultPosition, wxDefaultSize, style, wx_s));
+    }
+
+    // wxStaticBoxSizer has two ctors. The (orient, parent, label) form is the
+    // common one — wxWidgets creates the static box internally and parents it
+    // to `parent`, so the box dies with the parent and the bridge does not
+    // own it. The (box, orient) form takes an existing wxStaticBox; the box
+    // must already be a child of the window the sizer will live in. Both are
+    // exposed so scripts can pick whichever fits their construction order.
+    wxStaticBoxSizer* create_static_box_sizer(int orient, wxWindow* parent,
+                                              const std::string& label = "") {
+        wxStaticBoxSizer* s = new wxStaticBoxSizer(orient, parent, wxString::FromUTF8(label.c_str()));
+        AddRef(s);
+        return s;
+    }
+
+    wxStaticBoxSizer* create_static_box_sizer_for_box(wxStaticBox* box, int orient) {
+        wxStaticBoxSizer* s = new wxStaticBoxSizer(box, orient);
+        AddRef(s);
+        return s;
+    }
+
     wxPanel* create_panel(wxWindow* parent, long style = wxTAB_TRAVERSAL) {
         return Track(new wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, style));
     }
@@ -129,6 +200,13 @@ void register_wx_manager(asIScriptEngine* engine) {
     engine->RegisterObjectMethod("wx", "wx_button@ create_button(wx_window@, const string &in label, int style = 0)", asMETHOD(WxManager, create_button), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_check_box@ create_check_box(wx_window@, const string &in label, int style = 0)", asMETHOD(WxManager, create_check_box), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_box_sizer@ create_box_sizer(int orientation)", asMETHOD(WxManager, create_box_sizer), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_grid_sizer@ create_grid_sizer(int rows, int cols, int vgap = 0, int hgap = 0)", asMETHOD(WxManager, create_grid_sizer), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_flex_grid_sizer@ create_flex_grid_sizer(int rows, int cols, int vgap = 0, int hgap = 0)", asMETHOD(WxManager, create_flex_grid_sizer), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_grid_bag_sizer@ create_grid_bag_sizer(int vgap = 0, int hgap = 0)", asMETHOD(WxManager, create_grid_bag_sizer), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_wrap_sizer@ create_wrap_sizer(int orient = WX_HORIZONTAL, int flags = WX_WRAPSIZER_DEFAULT_FLAGS)", asMETHOD(WxManager, create_wrap_sizer), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_static_box@ create_static_box(wx_window@, const string &in label, int style = 0)", asMETHOD(WxManager, create_static_box), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_static_box_sizer@ create_static_box_sizer(int orient, wx_window@, const string &in label = \"\")", asMETHOD(WxManager, create_static_box_sizer), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_static_box_sizer@ create_static_box_sizer_for_box(wx_static_box@, int orient)", asMETHOD(WxManager, create_static_box_sizer_for_box), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_panel@ create_panel(wx_window@, int style = WX_TAB_TRAVERSAL)", asMETHOD(WxManager, create_panel), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_static_text@ create_static_text(wx_window@, const string &in label, int style = 0)", asMETHOD(WxManager, create_static_text), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_text_control@ create_text_control(wx_window@, const string &in text = \"\", int style = 0)", asMETHOD(WxManager, create_text_control), asCALL_THISCALL);
