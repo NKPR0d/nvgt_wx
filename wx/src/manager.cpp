@@ -44,8 +44,8 @@ public:
 #endif
     }
 
-    wxFrame* create_frame(const std::string& title, int w, int h, long style = wxDEFAULT_FRAME_STYLE) {
-        return Track(new wxFrame(NULL, wxID_ANY, wxString::FromUTF8(title.c_str()), wxDefaultPosition, wxSize(w, h), style));
+    wxFrame* create_frame(const std::string& title, const wx_size& size, long style = wxDEFAULT_FRAME_STYLE) {
+        return Track(new wxFrame(NULL, wxID_ANY, wxString::FromUTF8(title.c_str()), wxDefaultPosition, size, style));
     }
 
     wxButton* create_button(wxWindow* parent, const std::string& label, long style = 0) {
@@ -94,7 +94,7 @@ void register_wx_manager(asIScriptEngine* engine) {
     engine->RegisterObjectBehaviour("wx", asBEHAVE_DESTRUCT, "void f()", asFUNCTION(WxDestructor), asCALL_CDECL_OBJLAST);
 
     engine->RegisterObjectMethod("wx", "void update()", asMETHOD(WxManager, update), asCALL_THISCALL);
-    engine->RegisterObjectMethod("wx", "wx_frame@ create_frame(const string &in title, int width, int height, int style = WX_DEFAULT_FRAME_STYLE)", asMETHOD(WxManager, create_frame), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx", "wx_frame@ create_frame(const string &in title, const wx_size &in size, int style = WX_DEFAULT_FRAME_STYLE)", asMETHOD(WxManager, create_frame), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_button@ create_button(wx_window@, const string &in label, int style = 0)", asMETHOD(WxManager, create_button), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_check_box@ create_check_box(wx_window@, const string &in label, int style = 0)", asMETHOD(WxManager, create_check_box), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_box_sizer@ create_box_sizer(int orientation)", asMETHOD(WxManager, create_box_sizer), asCALL_THISCALL);

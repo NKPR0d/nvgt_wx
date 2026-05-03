@@ -13,6 +13,153 @@
 namespace {
 
 // ---------------------------------------------------------------------------
+// Value-type constructors. AngelScript needs a CONSTRUCT behaviour for any
+// non-default constructor we expose. The default constructors are also
+// registered explicitly so AS-side `wx_point p;` resolves consistently
+// across compilers.
+// ---------------------------------------------------------------------------
+void wx_point_default_ctor(void* mem) { new (mem) wxPoint(); }
+void wx_point_xy_ctor(int x, int y, void* mem) { new (mem) wxPoint(x, y); }
+void wx_point_copy_ctor(const wxPoint& other, void* mem) { new (mem) wxPoint(other); }
+void wx_point_dtor(void* mem) { static_cast<wxPoint*>(mem)->~wxPoint(); }
+
+void wx_size_default_ctor(void* mem) { new (mem) wxSize(); }
+void wx_size_wh_ctor(int w, int h, void* mem) { new (mem) wxSize(w, h); }
+void wx_size_copy_ctor(const wxSize& other, void* mem) { new (mem) wxSize(other); }
+void wx_size_dtor(void* mem) { static_cast<wxSize*>(mem)->~wxSize(); }
+
+void wx_rect_default_ctor(void* mem) { new (mem) wxRect(); }
+void wx_rect_xywh_ctor(int x, int y, int w, int h, void* mem) { new (mem) wxRect(x, y, w, h); }
+void wx_rect_copy_ctor(const wxRect& other, void* mem) { new (mem) wxRect(other); }
+void wx_rect_dtor(void* mem) { static_cast<wxRect*>(mem)->~wxRect(); }
+
+void wx_colour_default_ctor(void* mem) {
+    auto* p = static_cast<wx_colour*>(mem);
+    p->r = 0; p->g = 0; p->b = 0; p->a = 255;
+}
+void wx_colour_rgb_ctor(unsigned char r, unsigned char g, unsigned char b, void* mem) {
+    auto* p = static_cast<wx_colour*>(mem);
+    p->r = r; p->g = g; p->b = b; p->a = 255;
+}
+void wx_colour_rgba_ctor(unsigned char r, unsigned char g, unsigned char b, unsigned char a, void* mem) {
+    auto* p = static_cast<wx_colour*>(mem);
+    p->r = r; p->g = g; p->b = b; p->a = a;
+}
+void wx_colour_copy_ctor(const wx_colour& other, void* mem) {
+    new (mem) wx_colour(other);
+}
+void wx_colour_dtor(void* mem) { static_cast<wx_colour*>(mem)->~wx_colour(); }
+
+// wx_colour has no user-defined operator= (it is a plain POD struct of four
+// uint8_t), so binding the implicitly-generated copy assignment via
+// asMETHODPR works — but only because the compiler emits a real member
+// `wx_colour& operator=(const wx_colour&)` for any class that doesn't
+// delete copy assignment. Using a free wrapper documents this clearly
+// and keeps the binding identical to wx_point/wx_size/wx_rect (which use
+// asMETHODPR on wxPoint::operator= / wxSize::operator= / wxRect::operator=).
+wx_colour& wx_colour_op_assign(wx_colour* self, const wx_colour& other) {
+    *self = other;
+    return *self;
+}
+
+void register_value_types(asIScriptEngine* engine) {
+    // The class-trait flags are derived from `asGetTypeTraits<T>()`
+    // rather than spelled out manually. This is the canonical AS pattern
+    // and stays correct under any compiler that honours
+    // std::is_trivially_*: for example, wxPoint has a non-trivial default
+    // constructor but trivial copy/destruct, so it gets just
+    // asOBJ_APP_CLASS_C, while wx_colour has no user-defined special
+    // members and gets bare asOBJ_APP_CLASS. Hand-writing flags risks
+    // over-claiming (which forces unnecessary by-reference passing) or
+    // under-claiming (which may misrepresent the type to AngelScript on
+    // platforms with stricter calling conventions, e.g. SystemV x86_64).
+    // asOBJ_APP_CLASS_ALLINTS is added for wxPoint/wxSize/wxRect because
+    // every member is `int` — this is a class-layout hint AS uses for
+    // value-type passing on non-Windows ABIs. wx_colour also gets
+    // ALLINTS because every member is `uint8_t`.
+    engine->RegisterObjectType("wx_point", sizeof(wxPoint),
+        asOBJ_VALUE | asGetTypeTraits<wxPoint>() | asOBJ_APP_CLASS_ALLINTS);
+    engine->RegisterObjectBehaviour("wx_point", asBEHAVE_CONSTRUCT, "void f()",
+        asFUNCTION(wx_point_default_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_point", asBEHAVE_CONSTRUCT, "void f(int x, int y)",
+        asFUNCTION(wx_point_xy_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_point", asBEHAVE_CONSTRUCT, "void f(const wx_point &in)",
+        asFUNCTION(wx_point_copy_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_point", asBEHAVE_DESTRUCT, "void f()",
+        asFUNCTION(wx_point_dtor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectMethod("wx_point", "wx_point &opAssign(const wx_point &in)",
+        asMETHODPR(wxPoint, operator=, (const wxPoint&), wxPoint&), asCALL_THISCALL);
+    engine->RegisterObjectProperty("wx_point", "int x", offsetof(wxPoint, x));
+    engine->RegisterObjectProperty("wx_point", "int y", offsetof(wxPoint, y));
+
+    // wx_size: AS-visible properties are width/height while the underlying
+    // wxSize stores them as x/y. Map AS names to the C++ offsets so the
+    // value type is properties-by-position correct.
+    engine->RegisterObjectType("wx_size", sizeof(wxSize),
+        asOBJ_VALUE | asGetTypeTraits<wxSize>() | asOBJ_APP_CLASS_ALLINTS);
+    engine->RegisterObjectBehaviour("wx_size", asBEHAVE_CONSTRUCT, "void f()",
+        asFUNCTION(wx_size_default_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_size", asBEHAVE_CONSTRUCT, "void f(int width, int height)",
+        asFUNCTION(wx_size_wh_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_size", asBEHAVE_CONSTRUCT, "void f(const wx_size &in)",
+        asFUNCTION(wx_size_copy_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_size", asBEHAVE_DESTRUCT, "void f()",
+        asFUNCTION(wx_size_dtor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectMethod("wx_size", "wx_size &opAssign(const wx_size &in)",
+        asMETHODPR(wxSize, operator=, (const wxSize&), wxSize&), asCALL_THISCALL);
+    // wxSize stores members as x/y internally, but the AS-visible API uses
+    // width/height to match the wx documentation.
+    engine->RegisterObjectProperty("wx_size", "int width", offsetof(wxSize, x));
+    engine->RegisterObjectProperty("wx_size", "int height", offsetof(wxSize, y));
+
+    engine->RegisterObjectType("wx_rect", sizeof(wxRect),
+        asOBJ_VALUE | asGetTypeTraits<wxRect>() | asOBJ_APP_CLASS_ALLINTS);
+    engine->RegisterObjectBehaviour("wx_rect", asBEHAVE_CONSTRUCT, "void f()",
+        asFUNCTION(wx_rect_default_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_rect", asBEHAVE_CONSTRUCT, "void f(int x, int y, int width, int height)",
+        asFUNCTION(wx_rect_xywh_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_rect", asBEHAVE_CONSTRUCT, "void f(const wx_rect &in)",
+        asFUNCTION(wx_rect_copy_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_rect", asBEHAVE_DESTRUCT, "void f()",
+        asFUNCTION(wx_rect_dtor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectMethod("wx_rect", "wx_rect &opAssign(const wx_rect &in)",
+        asMETHODPR(wxRect, operator=, (const wxRect&), wxRect&), asCALL_THISCALL);
+    engine->RegisterObjectProperty("wx_rect", "int x", offsetof(wxRect, x));
+    engine->RegisterObjectProperty("wx_rect", "int y", offsetof(wxRect, y));
+    engine->RegisterObjectProperty("wx_rect", "int width", offsetof(wxRect, width));
+    engine->RegisterObjectProperty("wx_rect", "int height", offsetof(wxRect, height));
+
+    // wx_colour: custom POD; default alpha is 255 in the no-alpha ctor to
+    // match wx defaults. asOBJ_POD is asserted alongside asGetTypeTraits
+    // because the struct is layout-trivial — AS can memcpy it across the
+    // boundary safely.
+    engine->RegisterObjectType("wx_colour", sizeof(wx_colour),
+        asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<wx_colour>() | asOBJ_APP_CLASS_ALLINTS);
+    engine->RegisterObjectBehaviour("wx_colour", asBEHAVE_CONSTRUCT, "void f()",
+        asFUNCTION(wx_colour_default_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_colour", asBEHAVE_CONSTRUCT, "void f(uint8 r, uint8 g, uint8 b)",
+        asFUNCTION(wx_colour_rgb_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_colour", asBEHAVE_CONSTRUCT, "void f(uint8 r, uint8 g, uint8 b, uint8 a)",
+        asFUNCTION(wx_colour_rgba_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_colour", asBEHAVE_CONSTRUCT, "void f(const wx_colour &in)",
+        asFUNCTION(wx_colour_copy_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_colour", asBEHAVE_DESTRUCT, "void f()",
+        asFUNCTION(wx_colour_dtor), asCALL_CDECL_OBJLAST);
+    // Symmetric with wxPoint/wxSize/wxRect: every value type gets
+    // an explicit opAssign so script authors can rely on the
+    // assignment operator existing on every wx_* value type.
+    // Without this AS still emits memberwise copy for POD types, but
+    // the asymmetry (`wx_point` had it, `wx_colour` did not) is a
+    // footgun for someone doing template-style code generation.
+    engine->RegisterObjectMethod("wx_colour", "wx_colour &opAssign(const wx_colour &in)",
+        asFUNCTION(wx_colour_op_assign), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectProperty("wx_colour", "uint8 r", offsetof(wx_colour, r));
+    engine->RegisterObjectProperty("wx_colour", "uint8 g", offsetof(wx_colour, g));
+    engine->RegisterObjectProperty("wx_colour", "uint8 b", offsetof(wx_colour, b));
+    engine->RegisterObjectProperty("wx_colour", "uint8 a", offsetof(wx_colour, a));
+}
+
+// ---------------------------------------------------------------------------
 // REG_BASE_REF — AddRef/Release behaviours, applied to every wx ref type.
 // ---------------------------------------------------------------------------
 #define REG_BASE_REF(name) \
@@ -22,6 +169,12 @@ namespace {
 // ---------------------------------------------------------------------------
 // REG_WINDOW_METHODS — wxWindow surface, applied to every wx_window-derived
 // type.
+//
+// All geometry and colour accessors are exposed as AngelScript properties
+// using the wx_point / wx_size / wx_rect / wx_colour value types. This
+// keeps script-side code idiomatic (`win.size = wx_size(640, 480)`) and
+// avoids the awkward `int &out` triples and tuples that the bridge used
+// in earlier revisions.
 // ---------------------------------------------------------------------------
 #define REG_WINDOW_METHODS(name) \
     engine->RegisterObjectMethod(name, "bool show(bool visible = true)", asMETHOD(wxWindow, Show), asCALL_THISCALL); \
@@ -31,10 +184,25 @@ namespace {
     engine->RegisterObjectMethod(name, "bool has_focus()", asMETHOD(wxWindow, HasFocus), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void set_focus()", asMETHOD(wxWindow, SetFocus), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void layout()", asMETHOD(wxWindow, Layout), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "void center(int direction = 3)", asMETHOD(wxWindow, Center), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void center(int direction = WX_BOTH)", asMETHOD(wxWindow, Center), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void fit()", asMETHOD(wxWindow, Fit), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void fit_inside()", asMETHOD(wxWindow, FitInside), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "int get_id() const property", asMETHOD(wxWindow, GetId), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void refresh()", asFUNCTION(wx_window_refresh), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void update()", asMETHOD(wxWindow, Update), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void scroll_window(int dx, int dy)", asFUNCTION(wx_window_scroll_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void raise()", asMETHOD(wxWindow, Raise), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void lower()", asMETHOD(wxWindow, Lower), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void freeze()", asMETHOD(wxWindow, Freeze), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void thaw()", asMETHOD(wxWindow, Thaw), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool is_frozen() const", asMETHOD(wxWindow, IsFrozen), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void capture_mouse()", asMETHOD(wxWindow, CaptureMouse), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void release_mouse()", asMETHOD(wxWindow, ReleaseMouse), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool has_capture() const", asMETHOD(wxWindow, HasCapture), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void drag_accept_files(bool accept)", asMETHOD(wxWindow, DragAcceptFiles), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "int get_char_height() const", asMETHOD(wxWindow, GetCharHeight), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "int get_char_width() const", asMETHOD(wxWindow, GetCharWidth), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "double get_dpi_scale_factor() const", asMETHOD(wxWindow, GetDPIScaleFactor), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "bool destroy()", asMETHOD(wxWindow, Destroy), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "bool close(bool force = false)", asMETHOD(wxWindow, Close), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void bind(wx_event_type, wx_callback@)", asFUNCTION(wx_window_bind), asCALL_CDECL_OBJFIRST); \
@@ -43,18 +211,56 @@ namespace {
     engine->RegisterObjectMethod(name, "string get_tool_tip() const property", asFUNCTION(wx_window_get_tool_tip), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_tool_tip(const string &in tool_tip) property", asFUNCTION(wx_window_set_tool_tip), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void unset_tool_tip()", asMETHOD(wxWindow, UnsetToolTip), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "void get_background_colour(int &out r, int &out g, int &out b)", asFUNCTION(wx_window_get_background_colour), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_background_colour(int r, int g, int b)", asFUNCTION(wx_window_set_background_colour), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void get_foreground_colour(int &out r, int &out g, int &out b)", asFUNCTION(wx_window_get_foreground_colour), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_foreground_colour(int r, int g, int b)", asFUNCTION(wx_window_set_foreground_colour), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "string get_name() const property", asFUNCTION(wx_window_get_name), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_name(const string &in name) property", asFUNCTION(wx_window_set_name), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "string get_help_text() const property", asFUNCTION(wx_window_get_help_text), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_help_text(const string &in text) property", asFUNCTION(wx_window_set_help_text), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_colour get_background_colour() const property", asFUNCTION(wx_window_get_background_colour), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_background_colour(const wx_colour &in colour) property", asFUNCTION(wx_window_set_background_colour), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_colour get_foreground_colour() const property", asFUNCTION(wx_window_get_foreground_colour), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_foreground_colour(const wx_colour &in colour) property", asFUNCTION(wx_window_set_foreground_colour), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "wx_sizer@ get_sizer() const property", asFUNCTION(wx_window_get_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_sizer(wx_sizer@) property", asFUNCTION(wx_window_set_sizer), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void get_position(int &out width, int &out height)", asFUNCTION(wx_window_get_position), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_position(int width, int height)", asFUNCTION(wx_window_set_position), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void get_size(int &out width, int &out height)", asFUNCTION(wx_window_get_size), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_size(int width, int height)", asFUNCTION(wx_window_set_size), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "bool is_shown()", asMETHOD(wxWindow, IsShown), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "bool is_enabled()", asMETHOD(wxWindow, IsEnabled), asCALL_THISCALL);
+    engine->RegisterObjectMethod(name, "wx_window@ get_parent() const property", asFUNCTION(wx_window_get_parent), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_window@ get_grandparent() const property", asFUNCTION(wx_window_get_grandparent), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_point get_position() const property", asFUNCTION(wx_window_get_position), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_position(const wx_point &in position) property", asFUNCTION(wx_window_set_position), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_point get_screen_position() const property", asFUNCTION(wx_window_get_screen_position), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_size get_size() const property", asFUNCTION(wx_window_get_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_size(const wx_size &in size) property", asFUNCTION(wx_window_set_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_size(const wx_rect &in rect)", asFUNCTION(wx_window_set_size_rect), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_size get_client_size() const property", asFUNCTION(wx_window_get_client_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_client_size(const wx_size &in size) property", asFUNCTION(wx_window_set_client_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_size get_min_size() const property", asFUNCTION(wx_window_get_min_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_min_size(const wx_size &in size) property", asFUNCTION(wx_window_set_min_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_size get_max_size() const property", asFUNCTION(wx_window_get_max_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_max_size(const wx_size &in size) property", asFUNCTION(wx_window_set_max_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_size get_min_client_size() const property", asFUNCTION(wx_window_get_min_client_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_min_client_size(const wx_size &in size) property", asFUNCTION(wx_window_set_min_client_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_size get_max_client_size() const property", asFUNCTION(wx_window_get_max_client_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_max_client_size(const wx_size &in size) property", asFUNCTION(wx_window_set_max_client_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_size get_virtual_size() const property", asFUNCTION(wx_window_get_virtual_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_virtual_size(const wx_size &in size) property", asFUNCTION(wx_window_set_virtual_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_size get_window_border_size() const property", asFUNCTION(wx_window_get_window_border_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_size get_dpi() const property", asFUNCTION(wx_window_get_dpi), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_size get_best_size() const property", asFUNCTION(wx_window_get_best_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_rect get_rect() const property", asFUNCTION(wx_window_get_rect), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_rect get_screen_rect() const property", asFUNCTION(wx_window_get_screen_rect), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_rect get_client_rect() const property", asFUNCTION(wx_window_get_client_rect), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_point client_to_screen(const wx_point &in pt) const", asFUNCTION(wx_window_client_to_screen), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_point screen_to_client(const wx_point &in pt) const", asFUNCTION(wx_window_screen_to_client), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void move(const wx_point &in pt)", asFUNCTION(wx_window_move), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_size_hints(const wx_size &in min_size, const wx_size &in max_size)", asFUNCTION(wx_window_set_size_hints), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_initial_size(const wx_size &in size)", asFUNCTION(wx_window_set_initial_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_size get_text_extent(const string &in text) const", asFUNCTION(wx_window_get_text_extent), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int get_window_style() const property", asFUNCTION(wx_window_get_window_style), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_window_style(int style) property", asFUNCTION(wx_window_set_window_style), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool has_flag(int flag) const", asMETHOD(wxWindow, HasFlag), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void toggle_window_style(int flag)", asMETHOD(wxWindow, ToggleWindowStyle), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "int get_extra_style() const property", asFUNCTION(wx_window_get_extra_style), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_extra_style(int style) property", asFUNCTION(wx_window_set_extra_style), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool is_shown() const", asMETHOD(wxWindow, IsShown), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool is_enabled() const", asMETHOD(wxWindow, IsEnabled), asCALL_THISCALL);
 
 // ---------------------------------------------------------------------------
 // REG_TLW_METHODS — wxTopLevelWindow surface (frame/dialog/...).
@@ -65,53 +271,88 @@ namespace {
     engine->RegisterObjectMethod(name, "bool full_screen(bool show)", asFUNCTION(wx_tlw_show_full_screen), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void maximize(bool maximize = true)", asMETHOD(wxTopLevelWindow, Maximize), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void iconize(bool iconize = true)", asMETHOD(wxTopLevelWindow, Iconize), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "bool is_full_screen()", asMETHOD(wxTopLevelWindow, IsFullScreen), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "bool is_maximized()", asMETHOD(wxTopLevelWindow, IsMaximized), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "bool is_iconized()", asMETHOD(wxTopLevelWindow, IsIconized), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void restore()", asMETHOD(wxTopLevelWindow, Restore), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool is_full_screen() const", asMETHOD(wxTopLevelWindow, IsFullScreen), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool is_maximized() const", asMETHOD(wxTopLevelWindow, IsMaximized), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool is_iconized() const", asMETHOD(wxTopLevelWindow, IsIconized), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool is_active()", asMETHOD(wxTopLevelWindow, IsActive), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void show_without_activating()", asMETHOD(wxTopLevelWindow, ShowWithoutActivating), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void centre_on_screen(int direction = WX_BOTH)", asMETHOD(wxTopLevelWindow, CentreOnScreen), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "bool enable_close_button(bool enable = true)", asMETHOD(wxTopLevelWindow, EnableCloseButton), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "bool enable_maximize_button(bool enable = true)", asMETHOD(wxTopLevelWindow, EnableMaximizeButton), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "bool enable_minimize_button(bool enable = true)", asMETHOD(wxTopLevelWindow, EnableMinimizeButton), asCALL_THISCALL); \
     engine->RegisterObjectMethod(name, "void request_user_attention(wx_user_attention flags = WX_USER_ATTENTION_INFO)", asMETHOD(wxTopLevelWindow, RequestUserAttention), asCALL_THISCALL);
 
 // ---------------------------------------------------------------------------
-// REG_CONTROL_METHODS — wxControl surface (just label for now).
+// REG_CONTROL_METHODS — wxControl surface. Label/markup live here (and
+// not on wx_window) because wxControl::SetLabel mirrors the value into
+// the window Name for accessibility.
 // ---------------------------------------------------------------------------
 #define REG_CONTROL_METHODS(name) \
     engine->RegisterObjectMethod(name, "string get_label() const property", asFUNCTION(wx_control_get_label), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_label(const string &in label) property", asFUNCTION(wx_control_set_label), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod(name, "void set_label(const string &in label) property", asFUNCTION(wx_control_set_label), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "string get_label_text() const property", asFUNCTION(wx_control_get_label_text), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_label_text(const string &in text) property", asFUNCTION(wx_control_set_label_text), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool set_label_markup(const string &in markup)", asFUNCTION(wx_control_set_label_markup), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void command(wx_command_event@)", asFUNCTION(wx_control_command), asCALL_CDECL_OBJFIRST);
 
 // ---------------------------------------------------------------------------
-// REG_SIZER_METHODS — wxSizer surface.
+// REG_SIZER_METHODS — wxSizer surface. Geometry accessors are properties
+// using wx_point / wx_size, mirroring REG_WINDOW_METHODS.
 // ---------------------------------------------------------------------------
 #define REG_SIZER_METHODS(name) \
     engine->RegisterObjectMethod(name, "void add(wx_window@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_add_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void add(wx_sizer@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_add_sizer), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void add_spacer(int size)", asMETHOD(wxSizer, AddSpacer), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "void add_stretch_spacer(int proportion = 1)", asMETHOD(wxSizer, AddStretchSpacer), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "wx_sizer_item@ add_spacer(int size)", asFUNCTION(wx_sizer_add_spacer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_sizer_item@ add_stretch_spacer(int proportion = 1)", asFUNCTION(wx_sizer_add_stretch_spacer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void insert(int index, wx_window@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_insert_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void insert(int index, wx_sizer@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_insert_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_sizer_item@ insert_spacer(int index, int size)", asFUNCTION(wx_sizer_insert_spacer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_sizer_item@ insert_stretch_spacer(int index, int proportion = 1)", asFUNCTION(wx_sizer_insert_stretch_spacer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void prepend(wx_window@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_prepend_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void prepend(wx_sizer@, int proportion = 0, int flag = 0, int border = 0)", asFUNCTION(wx_sizer_prepend_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_sizer_item@ prepend_spacer(int size)", asFUNCTION(wx_sizer_prepend_spacer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_sizer_item@ prepend_stretch_spacer(int proportion = 1)", asFUNCTION(wx_sizer_prepend_stretch_spacer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool detach(wx_window@)", asFUNCTION(wx_sizer_detach_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool detach(wx_sizer@)", asFUNCTION(wx_sizer_detach_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool detach(int index)", asFUNCTION(wx_sizer_detach_index), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool remove(wx_sizer@)", asFUNCTION(wx_sizer_remove_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool show(wx_window@, bool show = true, bool recursive = false)", asFUNCTION(wx_sizer_show_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool show(wx_sizer@, bool show = true, bool recursive = false)", asFUNCTION(wx_sizer_show_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool show(int index, bool show = true)", asFUNCTION(wx_sizer_show_index), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool hide(wx_window@, bool recursive = false)", asFUNCTION(wx_sizer_hide_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool hide(wx_sizer@, bool recursive = false)", asFUNCTION(wx_sizer_hide_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool hide(int index)", asFUNCTION(wx_sizer_hide_index), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool is_shown(wx_window@) const", asFUNCTION(wx_sizer_is_shown_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool is_shown(wx_sizer@) const", asFUNCTION(wx_sizer_is_shown_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool is_shown(int index) const", asFUNCTION(wx_sizer_is_shown_index), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void show_items(bool show)", asFUNCTION(wx_sizer_show_items), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void show_all(bool show = true)", asFUNCTION(wx_sizer_show_all), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool are_any_items_shown() const", asFUNCTION(wx_sizer_are_any_items_shown), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "wx_sizer_item@ get_item(wx_window@)", asFUNCTION(wx_sizer_get_item_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "wx_sizer_item@ get_item(wx_sizer@)", asFUNCTION(wx_sizer_get_item_sz), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "wx_sizer_item@ get_item(int index)", asFUNCTION(wx_sizer_get_item_index), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "int find(wx_window@)", asFUNCTION(wx_sizer_find_window), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "int find(wx_sizer@)", asFUNCTION(wx_sizer_find_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int find(wx_window@) const", asFUNCTION(wx_sizer_find_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int find(wx_sizer@) const", asFUNCTION(wx_sizer_find_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool replace(wx_window@, wx_window@, bool recursive = false)", asFUNCTION(wx_sizer_replace_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool replace(wx_sizer@, wx_sizer@, bool recursive = false)", asFUNCTION(wx_sizer_replace_sizer), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void clear(bool delete_windows = false)", asMETHOD(wxSizer, Clear), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void clear(bool delete_windows = false)", asFUNCTION(wx_sizer_clear), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void delete_windows()", asFUNCTION(wx_sizer_delete_windows), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void layout()", asMETHOD(wxSizer, Layout), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "void get_position(int &out width, int &out height)", asFUNCTION(wx_sizer_get_position), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void get_size(int &out width, int &out height)", asFUNCTION(wx_sizer_get_size), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "int get_item_count()", asMETHOD(wxSizer, GetItemCount), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "bool is_empty()", asMETHOD(wxSizer, IsEmpty), asCALL_THISCALL);
+    engine->RegisterObjectMethod(name, "wx_size fit(wx_window@)", asFUNCTION(wx_sizer_fit), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void fit_inside(wx_window@)", asFUNCTION(wx_sizer_fit_inside), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_size_hints(wx_window@)", asFUNCTION(wx_sizer_set_size_hints), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_size compute_fitting_client_size(wx_window@)", asFUNCTION(wx_sizer_compute_fitting_client_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_size compute_fitting_window_size(wx_window@)", asFUNCTION(wx_sizer_compute_fitting_window_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_point get_position() const property", asFUNCTION(wx_sizer_get_position), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_size get_size() const property", asFUNCTION(wx_sizer_get_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_size get_min_size() const property", asFUNCTION(wx_sizer_get_min_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_min_size(const wx_size &in size) property", asFUNCTION(wx_sizer_set_min_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool set_item_min_size(wx_window@, const wx_size &in size)", asFUNCTION(wx_sizer_set_item_min_size_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool set_item_min_size(wx_sizer@, const wx_size &in size)", asFUNCTION(wx_sizer_set_item_min_size_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool set_item_min_size(int index, const wx_size &in size)", asFUNCTION(wx_sizer_set_item_min_size_index), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int get_item_count() const property", asMETHOD(wxSizer, GetItemCount), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool is_empty() const", asMETHOD(wxSizer, IsEmpty), asCALL_THISCALL);
 
 // ---------------------------------------------------------------------------
 // REG_TEXT_ENTRY_METHODS — wxTextEntry mix-in surface, applied to any
@@ -122,6 +363,7 @@ namespace {
 #define REG_TEXT_ENTRY_METHODS(name) \
     engine->RegisterObjectMethod(name, "string get_value() const property", asFUNCTION(wx_text_entry_get_value), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_value(const string &in value) property", asFUNCTION(wx_text_entry_set_value), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void change_value(const string &in value)", asFUNCTION(wx_text_entry_change_value), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void write_text(const string &in text)", asFUNCTION(wx_text_entry_write_text), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void append_text(const string &in text)", asFUNCTION(wx_text_entry_append_text), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void clear()", asFUNCTION(wx_text_entry_clear), asCALL_CDECL_OBJFIRST); \
@@ -131,22 +373,32 @@ namespace {
     engine->RegisterObjectMethod(name, "void remove(int from, int to)", asFUNCTION(wx_text_entry_remove), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void undo()", asFUNCTION(wx_text_entry_undo), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void redo()", asFUNCTION(wx_text_entry_redo), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "bool can_copy()", asFUNCTION(wx_text_entry_can_copy), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "bool can_cut()", asFUNCTION(wx_text_entry_can_cut), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "bool can_paste()", asFUNCTION(wx_text_entry_can_paste), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "bool can_undo()", asFUNCTION(wx_text_entry_can_undo), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "bool can_redo()", asFUNCTION(wx_text_entry_can_redo), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "string get_range(int from, int to)", asFUNCTION(wx_text_entry_get_range), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "string get_string_selection()", asFUNCTION(wx_text_entry_get_string_selection), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void get_selection(int &out from, int &out to)", asFUNCTION(wx_text_entry_get_selection), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool can_copy() const", asFUNCTION(wx_text_entry_can_copy), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool can_cut() const", asFUNCTION(wx_text_entry_can_cut), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool can_paste() const", asFUNCTION(wx_text_entry_can_paste), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool can_undo() const", asFUNCTION(wx_text_entry_can_undo), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool can_redo() const", asFUNCTION(wx_text_entry_can_redo), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "string get_range(int from, int to) const", asFUNCTION(wx_text_entry_get_range), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "string get_string_selection() const", asFUNCTION(wx_text_entry_get_string_selection), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void get_selection(int &out from, int &out to) const", asFUNCTION(wx_text_entry_get_selection), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_selection(int from, int to)", asFUNCTION(wx_text_entry_set_selection), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "bool is_editable()", asFUNCTION(wx_text_entry_is_editable), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_editable(bool editable)", asFUNCTION(wx_text_entry_set_editable), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "bool is_empty()", asFUNCTION(wx_text_entry_is_empty), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool has_selection() const", asFUNCTION(wx_text_entry_has_selection), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool is_editable() const property", asFUNCTION(wx_text_entry_is_editable), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_editable(bool editable) property", asFUNCTION(wx_text_entry_set_editable), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool is_empty() const", asFUNCTION(wx_text_entry_is_empty), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void replace(int from, int to, const string &in text)", asFUNCTION(wx_text_entry_replace), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void select_all()", asFUNCTION(wx_text_entry_select_all), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void select_none()", asFUNCTION(wx_text_entry_select_none), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "void set_max_length(int length)", asFUNCTION(wx_text_entry_set_max_length), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod(name, "void set_max_length(int length)", asFUNCTION(wx_text_entry_set_max_length), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int get_insertion_point() const property", asFUNCTION(wx_text_entry_get_insertion_point), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_insertion_point(int pos) property", asFUNCTION(wx_text_entry_set_insertion_point), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_insertion_point_end()", asFUNCTION(wx_text_entry_set_insertion_point_end), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int get_last_position() const", asFUNCTION(wx_text_entry_get_last_position), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void force_upper()", asFUNCTION(wx_text_entry_force_upper), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "string get_hint() const property", asFUNCTION(wx_text_entry_get_hint), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_hint(const string &in hint) property", asFUNCTION(wx_text_entry_set_hint), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool auto_complete_file_names()", asFUNCTION(wx_text_entry_auto_complete_file_names), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool auto_complete_directories()", asFUNCTION(wx_text_entry_auto_complete_directories), asCALL_CDECL_OBJFIRST);
 
 // ---------------------------------------------------------------------------
 // REGISTER_WX_* — register a concrete wx ref type, install AddRef/Release,
@@ -232,6 +484,12 @@ void register_key_codes(asIScriptEngine* engine) {
 } // namespace
 
 void register_all_types(asIScriptEngine* engine) {
+    // Value types (wx_point/wx_size/wx_rect/wx_colour) must be
+    // registered before any object type that takes or returns them in
+    // a method signature, otherwise AngelScript fails the registration
+    // call with "type not declared". Keep this first.
+    register_value_types(engine);
+
     engine->RegisterEnum("wx_orientation");
     engine->RegisterEnumValue("wx_orientation", "WX_VERTICAL", wxVERTICAL);
     engine->RegisterEnumValue("wx_orientation", "WX_HORIZONTAL", wxHORIZONTAL);
@@ -308,66 +566,80 @@ void register_all_types(asIScriptEngine* engine) {
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_TEXT_MAXLEN", wxEVT_TEXT_MAXLEN);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_RADIOBUTTON", wxEVT_RADIOBUTTON);
 
-    engine->RegisterEnum("wx_style");
-    // wx_window
-    engine->RegisterEnumValue("wx_style", "WX_BORDER_NONE", wxBORDER_NONE);
-    engine->RegisterEnumValue("wx_style", "WX_BORDER_STATIC", wxBORDER_STATIC);
-    engine->RegisterEnumValue("wx_style", "WX_BORDER_SIMPLE", wxBORDER_SIMPLE);
-    engine->RegisterEnumValue("wx_style", "WX_BORDER_RAISED", wxBORDER_RAISED);
-    engine->RegisterEnumValue("wx_style", "WX_BORDER_SUNKEN", wxBORDER_SUNKEN);
-    engine->RegisterEnumValue("wx_style", "WX_BORDER_THEME", wxBORDER_THEME);
-    engine->RegisterEnumValue("wx_style", "WX_HSCROLL", wxHSCROLL);
-    engine->RegisterEnumValue("wx_style", "WX_VSCROLL", wxVSCROLL);
-    engine->RegisterEnumValue("wx_style", "WX_WANTS_CHARS", wxWANTS_CHARS);
-    engine->RegisterEnumValue("wx_style", "WX_TAB_TRAVERSAL", wxTAB_TRAVERSAL);
-    engine->RegisterEnumValue("wx_style", "WX_CLIP_CHILDREN", wxCLIP_CHILDREN);
-    engine->RegisterEnumValue("wx_style", "WX_FULL_REPAINT_ON_RESIZE", wxFULL_REPAINT_ON_RESIZE);
-    // wx_frame
-    engine->RegisterEnumValue("wx_style", "WX_DEFAULT_FRAME_STYLE", wxDEFAULT_FRAME_STYLE);
-    engine->RegisterEnumValue("wx_style", "WX_ICONIZE", wxICONIZE);
-    engine->RegisterEnumValue("wx_style", "WX_MINIMIZE", wxMINIMIZE);
-    engine->RegisterEnumValue("wx_style", "WX_MAXIMIZE", wxMAXIMIZE);
-    engine->RegisterEnumValue("wx_style", "WX_CAPTION", wxCAPTION);
-    engine->RegisterEnumValue("wx_style", "WX_CLOSE_BOX", wxCLOSE_BOX);
-    engine->RegisterEnumValue("wx_style", "WX_MINIMIZE_BOX", wxMINIMIZE_BOX);
-    engine->RegisterEnumValue("wx_style", "WX_MAXIMIZE_BOX", wxMAXIMIZE_BOX);
-    engine->RegisterEnumValue("wx_style", "WX_RESIZE_BORDER", wxRESIZE_BORDER);
-    engine->RegisterEnumValue("wx_style", "WX_SYSTEM_MENU", wxSYSTEM_MENU);
-    engine->RegisterEnumValue("wx_style", "WX_STAY_ON_TOP", wxSTAY_ON_TOP);
-    engine->RegisterEnumValue("wx_style", "WX_FRAME_TOOL_WINDOW", wxFRAME_TOOL_WINDOW);
-    engine->RegisterEnumValue("wx_style", "WX_FRAME_NO_TASKBAR", wxFRAME_NO_TASKBAR);
-    engine->RegisterEnumValue("wx_style", "WX_NO_BORDER", wxNO_BORDER);
-    // wx_button
-    engine->RegisterEnumValue("wx_style", "WX_BU_LEFT", wxBU_LEFT);
-    engine->RegisterEnumValue("wx_style", "WX_BU_RIGHT", wxBU_RIGHT);
-    engine->RegisterEnumValue("wx_style", "WX_BU_TOP", wxBU_TOP);
-    engine->RegisterEnumValue("wx_style", "WX_BU_BOTTOM", wxBU_BOTTOM);
-    engine->RegisterEnumValue("wx_style", "WX_BU_EXACTFIT", wxBU_EXACTFIT);
-    engine->RegisterEnumValue("wx_style", "WX_BU_NOTEXT", wxBU_NOTEXT);
-    // wx_check_box
-    engine->RegisterEnumValue("wx_style", "WX_CHK_2STATE", wxCHK_2STATE);
-    engine->RegisterEnumValue("wx_style", "WX_CHK_3STATE", wxCHK_3STATE);
-    engine->RegisterEnumValue("wx_style", "WX_CHK_ALLOW_3RD_STATE_FOR_USER", wxCHK_ALLOW_3RD_STATE_FOR_USER);
-    // wx_text_control
-    engine->RegisterEnumValue("wx_style", "WX_TE_MULTILINE", wxTE_MULTILINE);
-    engine->RegisterEnumValue("wx_style", "WX_TE_PASSWORD", wxTE_PASSWORD);
-    engine->RegisterEnumValue("wx_style", "WX_TE_READONLY", wxTE_READONLY);
-    engine->RegisterEnumValue("wx_style", "WX_TE_PROCESS_ENTER", wxTE_PROCESS_ENTER);
-    engine->RegisterEnumValue("wx_style", "WX_TE_PROCESS_TAB", wxTE_PROCESS_TAB);
-    engine->RegisterEnumValue("wx_style", "WX_TE_RICH2", wxTE_RICH2);
-    engine->RegisterEnumValue("wx_style", "WX_TE_AUTO_URL", wxTE_AUTO_URL);
-    engine->RegisterEnumValue("wx_style", "WX_TE_NOHIDESEL", wxTE_NOHIDESEL);
-    engine->RegisterEnumValue("wx_style", "WX_TE_NO_VSCROLL", wxTE_NO_VSCROLL);
-    engine->RegisterEnumValue("wx_style", "WX_TE_LEFT", wxTE_LEFT);
-    engine->RegisterEnumValue("wx_style", "WX_TE_CENTRE", wxTE_CENTRE);
-    engine->RegisterEnumValue("wx_style", "WX_TE_RIGHT", wxTE_RIGHT);
-    engine->RegisterEnumValue("wx_style", "WX_TE_DONTWRAP", wxTE_DONTWRAP);
-    engine->RegisterEnumValue("wx_style", "WX_TE_CHARWRAP", wxTE_CHARWRAP);
-    engine->RegisterEnumValue("wx_style", "WX_TE_WORDWRAP", wxTE_WORDWRAP);
-    engine->RegisterEnumValue("wx_style", "WX_TE_BESTWRAP", wxTE_BESTWRAP);
-    // wx_radio_button
-    engine->RegisterEnumValue("wx_style", "WX_RB_GROUP", wxRB_GROUP);
-    engine->RegisterEnumValue("wx_style", "WX_RB_SINGLE", wxRB_SINGLE);
+    // Per-control style enums. The previous wx_style umbrella mixed
+    // bitmasks that overlap across control families (e.g. WX_TE_LEFT
+    // and WX_BU_LEFT share the same value but mean different things);
+    // splitting them per-control lets the script-side type checker
+    // catch obvious misuse and, more importantly, lets us add new
+    // controls without polluting a shared enum. The constant *names*
+    // are unchanged for source-level compatibility — only the enum
+    // they live in is different. AngelScript enum values implicitly
+    // convert to int, so OR-combining across enums is still legal at
+    // call sites.
+    engine->RegisterEnum("wx_window_style");
+    engine->RegisterEnumValue("wx_window_style", "WX_BORDER_NONE", wxBORDER_NONE);
+    engine->RegisterEnumValue("wx_window_style", "WX_BORDER_STATIC", wxBORDER_STATIC);
+    engine->RegisterEnumValue("wx_window_style", "WX_BORDER_SIMPLE", wxBORDER_SIMPLE);
+    engine->RegisterEnumValue("wx_window_style", "WX_BORDER_RAISED", wxBORDER_RAISED);
+    engine->RegisterEnumValue("wx_window_style", "WX_BORDER_SUNKEN", wxBORDER_SUNKEN);
+    engine->RegisterEnumValue("wx_window_style", "WX_BORDER_THEME", wxBORDER_THEME);
+    engine->RegisterEnumValue("wx_window_style", "WX_HSCROLL", wxHSCROLL);
+    engine->RegisterEnumValue("wx_window_style", "WX_VSCROLL", wxVSCROLL);
+    engine->RegisterEnumValue("wx_window_style", "WX_WANTS_CHARS", wxWANTS_CHARS);
+    engine->RegisterEnumValue("wx_window_style", "WX_TAB_TRAVERSAL", wxTAB_TRAVERSAL);
+    engine->RegisterEnumValue("wx_window_style", "WX_CLIP_CHILDREN", wxCLIP_CHILDREN);
+    engine->RegisterEnumValue("wx_window_style", "WX_FULL_REPAINT_ON_RESIZE", wxFULL_REPAINT_ON_RESIZE);
+    engine->RegisterEnumValue("wx_window_style", "WX_NO_BORDER", wxNO_BORDER);
+
+    engine->RegisterEnum("wx_frame_style");
+    engine->RegisterEnumValue("wx_frame_style", "WX_DEFAULT_FRAME_STYLE", wxDEFAULT_FRAME_STYLE);
+    engine->RegisterEnumValue("wx_frame_style", "WX_ICONIZE", wxICONIZE);
+    engine->RegisterEnumValue("wx_frame_style", "WX_MINIMIZE", wxMINIMIZE);
+    engine->RegisterEnumValue("wx_frame_style", "WX_MAXIMIZE", wxMAXIMIZE);
+    engine->RegisterEnumValue("wx_frame_style", "WX_CAPTION", wxCAPTION);
+    engine->RegisterEnumValue("wx_frame_style", "WX_CLOSE_BOX", wxCLOSE_BOX);
+    engine->RegisterEnumValue("wx_frame_style", "WX_MINIMIZE_BOX", wxMINIMIZE_BOX);
+    engine->RegisterEnumValue("wx_frame_style", "WX_MAXIMIZE_BOX", wxMAXIMIZE_BOX);
+    engine->RegisterEnumValue("wx_frame_style", "WX_RESIZE_BORDER", wxRESIZE_BORDER);
+    engine->RegisterEnumValue("wx_frame_style", "WX_SYSTEM_MENU", wxSYSTEM_MENU);
+    engine->RegisterEnumValue("wx_frame_style", "WX_STAY_ON_TOP", wxSTAY_ON_TOP);
+    engine->RegisterEnumValue("wx_frame_style", "WX_FRAME_TOOL_WINDOW", wxFRAME_TOOL_WINDOW);
+    engine->RegisterEnumValue("wx_frame_style", "WX_FRAME_NO_TASKBAR", wxFRAME_NO_TASKBAR);
+
+    engine->RegisterEnum("wx_button_style");
+    engine->RegisterEnumValue("wx_button_style", "WX_BU_LEFT", wxBU_LEFT);
+    engine->RegisterEnumValue("wx_button_style", "WX_BU_RIGHT", wxBU_RIGHT);
+    engine->RegisterEnumValue("wx_button_style", "WX_BU_TOP", wxBU_TOP);
+    engine->RegisterEnumValue("wx_button_style", "WX_BU_BOTTOM", wxBU_BOTTOM);
+    engine->RegisterEnumValue("wx_button_style", "WX_BU_EXACTFIT", wxBU_EXACTFIT);
+    engine->RegisterEnumValue("wx_button_style", "WX_BU_NOTEXT", wxBU_NOTEXT);
+
+    engine->RegisterEnum("wx_check_box_style");
+    engine->RegisterEnumValue("wx_check_box_style", "WX_CHK_2STATE", wxCHK_2STATE);
+    engine->RegisterEnumValue("wx_check_box_style", "WX_CHK_3STATE", wxCHK_3STATE);
+    engine->RegisterEnumValue("wx_check_box_style", "WX_CHK_ALLOW_3RD_STATE_FOR_USER", wxCHK_ALLOW_3RD_STATE_FOR_USER);
+
+    engine->RegisterEnum("wx_text_ctrl_style");
+    engine->RegisterEnumValue("wx_text_ctrl_style", "WX_TE_MULTILINE", wxTE_MULTILINE);
+    engine->RegisterEnumValue("wx_text_ctrl_style", "WX_TE_PASSWORD", wxTE_PASSWORD);
+    engine->RegisterEnumValue("wx_text_ctrl_style", "WX_TE_READONLY", wxTE_READONLY);
+    engine->RegisterEnumValue("wx_text_ctrl_style", "WX_TE_PROCESS_ENTER", wxTE_PROCESS_ENTER);
+    engine->RegisterEnumValue("wx_text_ctrl_style", "WX_TE_PROCESS_TAB", wxTE_PROCESS_TAB);
+    engine->RegisterEnumValue("wx_text_ctrl_style", "WX_TE_RICH2", wxTE_RICH2);
+    engine->RegisterEnumValue("wx_text_ctrl_style", "WX_TE_AUTO_URL", wxTE_AUTO_URL);
+    engine->RegisterEnumValue("wx_text_ctrl_style", "WX_TE_NOHIDESEL", wxTE_NOHIDESEL);
+    engine->RegisterEnumValue("wx_text_ctrl_style", "WX_TE_NO_VSCROLL", wxTE_NO_VSCROLL);
+    engine->RegisterEnumValue("wx_text_ctrl_style", "WX_TE_LEFT", wxTE_LEFT);
+    engine->RegisterEnumValue("wx_text_ctrl_style", "WX_TE_CENTRE", wxTE_CENTRE);
+    engine->RegisterEnumValue("wx_text_ctrl_style", "WX_TE_RIGHT", wxTE_RIGHT);
+    engine->RegisterEnumValue("wx_text_ctrl_style", "WX_TE_DONTWRAP", wxTE_DONTWRAP);
+    engine->RegisterEnumValue("wx_text_ctrl_style", "WX_TE_CHARWRAP", wxTE_CHARWRAP);
+    engine->RegisterEnumValue("wx_text_ctrl_style", "WX_TE_WORDWRAP", wxTE_WORDWRAP);
+    engine->RegisterEnumValue("wx_text_ctrl_style", "WX_TE_BESTWRAP", wxTE_BESTWRAP);
+
+    engine->RegisterEnum("wx_radio_button_style");
+    engine->RegisterEnumValue("wx_radio_button_style", "WX_RB_GROUP", wxRB_GROUP);
+    engine->RegisterEnumValue("wx_radio_button_style", "WX_RB_SINGLE", wxRB_SINGLE);
 
     engine->RegisterEnum("wx_user_attention");
     engine->RegisterEnumValue("wx_user_attention", "WX_USER_ATTENTION_INFO", wxUSER_ATTENTION_INFO);
@@ -502,6 +774,27 @@ void register_all_types(asIScriptEngine* engine) {
     engine->RegisterObjectMethod("wx_sizer_item", "void set_flag(int flag) property", asMETHOD(wxSizerItem, SetFlag), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_sizer_item", "int get_border() const property", asMETHOD(wxSizerItem, GetBorder), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_sizer_item", "void set_border(int border) property", asMETHOD(wxSizerItem, SetBorder), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_sizer_item", "wx_size get_size() const property", asFUNCTION(wx_sizer_item_get_size), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "wx_size calc_min()", asFUNCTION(wx_sizer_item_calc_min), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "wx_size get_min_size() const property", asFUNCTION(wx_sizer_item_get_min_size), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "void set_min_size(const wx_size &in size) property", asFUNCTION(wx_sizer_item_set_min_size), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "wx_size get_min_size_with_border() const property", asFUNCTION(wx_sizer_item_get_min_size_with_border), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "wx_size get_max_size() const property", asFUNCTION(wx_sizer_item_get_max_size), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "wx_size get_max_size_with_border() const property", asFUNCTION(wx_sizer_item_get_max_size_with_border), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "wx_rect get_rect() const property", asFUNCTION(wx_sizer_item_get_rect), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "wx_point get_position() const property", asFUNCTION(wx_sizer_item_get_position), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "wx_size get_spacer() const property", asFUNCTION(wx_sizer_item_get_spacer), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "void set_init_size(const wx_size &in size)", asFUNCTION(wx_sizer_item_set_init_size), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "void set_ratio(const wx_size &in size)", asFUNCTION(wx_sizer_item_set_ratio_size), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "void set_ratio(float ratio)", asFUNCTION(wx_sizer_item_set_ratio_float), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "bool is_window() const", asMETHOD(wxSizerItem, IsWindow), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_sizer_item", "bool is_sizer() const", asMETHOD(wxSizerItem, IsSizer), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_sizer_item", "bool is_spacer() const", asMETHOD(wxSizerItem, IsSpacer), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_sizer_item", "bool is_shown() const", asMETHOD(wxSizerItem, IsShown), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_sizer_item", "void show(bool show)", asMETHOD(wxSizerItem, Show), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx_sizer_item", "void detach_window()", asFUNCTION(wx_sizer_item_detach_window), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "void detach_sizer()", asFUNCTION(wx_sizer_item_detach_sizer), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_sizer_item", "void delete_windows()", asFUNCTION(wx_sizer_item_delete_windows), asCALL_CDECL_OBJFIRST);
 
     register_wx_manager(engine);
 }

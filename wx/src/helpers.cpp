@@ -110,48 +110,174 @@ void wx_window_set_tool_tip(wxWindow* self, const std::string& text) {
     if (self) self->SetToolTip(wxString::FromUTF8(text.c_str()));
 }
 
-void wx_window_get_background_colour(wxWindow* self, int& r, int& g, int& b) {
-    if (self) {
-        wxColour c = self->GetBackgroundColour();
-        r = c.Red(); g = c.Green(); b = c.Blue();
-    }
+// Geometry/colour adapters all use value types now. Each function returns
+// a default-constructed value type when self is null so AS-side property
+// reads remain safe across the bridge. wx_size and wx_point are aliased to
+// wxSize / wxPoint so the conversion is a no-op; wx_colour goes through
+// to_wx / from_wx.
+wx_colour wx_window_get_background_colour(wxWindow* self) {
+    return self ? from_wx(self->GetBackgroundColour()) : wx_colour{0, 0, 0, 255};
 }
 
-void wx_window_set_background_colour(wxWindow* self, int r, int g, int b) {
+void wx_window_set_background_colour(wxWindow* self, const wx_colour& c) {
     if (self) {
-        self->SetBackgroundColour(wxColour(r, g, b));
+        self->SetBackgroundColour(to_wx(c));
         self->Refresh();
     }
 }
 
-void wx_window_get_foreground_colour(wxWindow* self, int& r, int& g, int& b) {
-    if (self) {
-        wxColour c = self->GetForegroundColour();
-        r = c.Red(); g = c.Green(); b = c.Blue();
-    }
+wx_colour wx_window_get_foreground_colour(wxWindow* self) {
+    return self ? from_wx(self->GetForegroundColour()) : wx_colour{0, 0, 0, 255};
 }
 
-void wx_window_set_foreground_colour(wxWindow* self, int r, int g, int b) {
+void wx_window_set_foreground_colour(wxWindow* self, const wx_colour& c) {
     if (self) {
-        self->SetForegroundColour(wxColour(r, g, b));
+        self->SetForegroundColour(to_wx(c));
         self->Refresh();
     }
 }
 
-void wx_window_get_position(wxWindow* self, int& x, int& y) {
-    if (self) { wxPoint p = self->GetPosition(); x = p.x; y = p.y; }
+wx_point wx_window_get_position(wxWindow* self) {
+    return self ? self->GetPosition() : wxPoint(0, 0);
 }
 
-void wx_window_set_position(wxWindow* self, int x, int y) {
-    if (self) self->SetPosition(wxPoint(x, y));
+void wx_window_set_position(wxWindow* self, const wx_point& p) {
+    if (self) self->SetPosition(p);
 }
 
-void wx_window_get_size(wxWindow* self, int& out_w, int& out_h) {
-    if (self) self->GetSize(&out_w, &out_h);
+wx_size wx_window_get_size(wxWindow* self) {
+    return self ? self->GetSize() : wxSize(0, 0);
 }
 
-void wx_window_set_size(wxWindow* self, int w, int h) {
-    if (self) self->SetSize(w, h);
+void wx_window_set_size(wxWindow* self, const wx_size& s) {
+    if (self) self->SetSize(s);
+}
+
+wx_size wx_window_get_client_size(wxWindow* self) {
+    return self ? self->GetClientSize() : wxSize(0, 0);
+}
+
+void wx_window_set_client_size(wxWindow* self, const wx_size& s) {
+    if (self) self->SetClientSize(s);
+}
+
+wx_size wx_window_get_min_size(wxWindow* self) {
+    return self ? self->GetMinSize() : wxSize(-1, -1);
+}
+
+void wx_window_set_min_size(wxWindow* self, const wx_size& s) {
+    if (self) self->SetMinSize(s);
+}
+
+wx_size wx_window_get_max_size(wxWindow* self) {
+    return self ? self->GetMaxSize() : wxSize(-1, -1);
+}
+
+void wx_window_set_max_size(wxWindow* self, const wx_size& s) {
+    if (self) self->SetMaxSize(s);
+}
+
+wx_size wx_window_get_min_client_size(wxWindow* self) {
+    return self ? self->GetMinClientSize() : wxSize(-1, -1);
+}
+
+void wx_window_set_min_client_size(wxWindow* self, const wx_size& s) {
+    if (self) self->SetMinClientSize(s);
+}
+
+wx_size wx_window_get_max_client_size(wxWindow* self) {
+    return self ? self->GetMaxClientSize() : wxSize(-1, -1);
+}
+
+void wx_window_set_max_client_size(wxWindow* self, const wx_size& s) {
+    if (self) self->SetMaxClientSize(s);
+}
+
+wx_size wx_window_get_virtual_size(wxWindow* self) {
+    return self ? self->GetVirtualSize() : wxSize(0, 0);
+}
+
+void wx_window_set_virtual_size(wxWindow* self, const wx_size& s) {
+    if (self) self->SetVirtualSize(s);
+}
+
+wx_size wx_window_get_window_border_size(wxWindow* self) {
+    return self ? self->GetWindowBorderSize() : wxSize(0, 0);
+}
+
+wx_size wx_window_get_dpi(wxWindow* self) {
+    return self ? self->GetDPI() : wxSize(96, 96);
+}
+
+wx_size wx_window_get_best_size(wxWindow* self) {
+    return self ? self->GetBestSize() : wxSize(0, 0);
+}
+
+wx_point wx_window_get_screen_position(wxWindow* self) {
+    return self ? self->GetScreenPosition() : wxPoint(0, 0);
+}
+
+wx_rect wx_window_get_rect(wxWindow* self) {
+    return self ? self->GetRect() : wxRect(0, 0, 0, 0);
+}
+
+wx_rect wx_window_get_screen_rect(wxWindow* self) {
+    return self ? self->GetScreenRect() : wxRect(0, 0, 0, 0);
+}
+
+wx_rect wx_window_get_client_rect(wxWindow* self) {
+    return self ? self->GetClientRect() : wxRect(0, 0, 0, 0);
+}
+
+wx_point wx_window_client_to_screen(wxWindow* self, const wx_point& p) {
+    return self ? self->ClientToScreen(p) : p;
+}
+
+wx_point wx_window_screen_to_client(wxWindow* self, const wx_point& p) {
+    return self ? self->ScreenToClient(p) : p;
+}
+
+void wx_window_move(wxWindow* self, const wx_point& p) {
+    if (self) self->Move(p);
+}
+
+void wx_window_set_size_rect(wxWindow* self, const wx_rect& r) {
+    if (self) self->SetSize(r);
+}
+
+void wx_window_set_size_hints(wxWindow* self, const wx_size& min_size, const wx_size& max_size) {
+    if (self) self->SetSizeHints(min_size, max_size);
+}
+
+void wx_window_set_initial_size(wxWindow* self, const wx_size& s) {
+    if (self) self->SetInitialSize(s);
+}
+
+wx_size wx_window_get_text_extent(wxWindow* self, const std::string& text) {
+    return self ? self->GetTextExtent(wxString::FromUTF8(text.c_str())) : wxSize(0, 0);
+}
+
+// Note: there is intentionally no wx_window_get_label / set_label here.
+// wxControl overrides SetLabel and the script-side `label` property is
+// registered only on wx_control derivatives (REG_CONTROL_METHODS), with
+// the wx_control wrapper additionally syncing the window Name. Adding a
+// wx_window-level binding would either collide with REG_CONTROL_METHODS
+// (duplicate registration) or silently drop the SetName side effect.
+
+std::string wx_window_get_name(wxWindow* self) {
+    return self ? std::string(self->GetName().utf8_str()) : "";
+}
+
+void wx_window_set_name(wxWindow* self, const std::string& name) {
+    if (self) self->SetName(wxString::FromUTF8(name.c_str()));
+}
+
+std::string wx_window_get_help_text(wxWindow* self) {
+    return self ? std::string(self->GetHelpText().utf8_str()) : "";
+}
+
+void wx_window_set_help_text(wxWindow* self, const std::string& text) {
+    if (self) self->SetHelpText(wxString::FromUTF8(text.c_str()));
 }
 
 wxSizer* wx_window_get_sizer(wxWindow* self) {
@@ -180,6 +306,44 @@ void wx_window_refresh(wxWindow* self) {
     if (self) self->Refresh(true, nullptr);
 }
 
+// wxWindow::ScrollWindow takes a `const wxRect* = nullptr`. Same nullptr
+// hazard as Refresh; wrap to pass it explicitly.
+void wx_window_scroll_window(wxWindow* self, int dx, int dy) {
+    if (self) self->ScrollWindow(dx, dy, nullptr);
+}
+
+wxWindow* wx_window_get_parent(wxWindow* self) {
+    wxWindow* p = self ? self->GetParent() : nullptr;
+    return EnsureTracked(p);
+}
+
+wxWindow* wx_window_get_grandparent(wxWindow* self) {
+    wxWindow* p = self ? self->GetGrandParent() : nullptr;
+    return EnsureTracked(p);
+}
+
+// wxWindow style flags. wxWidgets stores these as `long`; AngelScript
+// only knows fixed-width int. asMETHOD-binding the wx accessors directly
+// happens to work on Windows MSVC x64 because LLP64 makes int and long
+// the same width there, but on LP64 platforms (Linux x86_64, macOS,
+// most Unixes on aarch64) `long` is 64-bit and a plain int caller would
+// truncate setters and read garbage from getters. Wrap explicitly.
+int wx_window_get_window_style(wxWindow* self) {
+    return self ? static_cast<int>(self->GetWindowStyleFlag()) : 0;
+}
+
+void wx_window_set_window_style(wxWindow* self, int style) {
+    if (self) self->SetWindowStyleFlag(static_cast<long>(style));
+}
+
+int wx_window_get_extra_style(wxWindow* self) {
+    return self ? static_cast<int>(self->GetExtraStyle()) : 0;
+}
+
+void wx_window_set_extra_style(wxWindow* self, int style) {
+    if (self) self->SetExtraStyle(static_cast<long>(style));
+}
+
 // ---------------------------------------------------------------------------
 // wxControl.
 // ---------------------------------------------------------------------------
@@ -193,6 +357,29 @@ void wx_control_set_label(wxControl* self, const std::string& label) {
         self->SetLabel(wx_s);
         self->SetName(wx_s);
     }
+}
+
+// SetLabelText/GetLabelText differ from SetLabel/GetLabel: they treat any
+// `&` in the input as a literal ampersand instead of a mnemonic marker.
+// Useful when the script has an arbitrary user string it wants to display
+// verbatim. We do not also touch SetName here, unlike SetLabel.
+std::string wx_control_get_label_text(wxControl* self) {
+    return self ? std::string(self->GetLabelText().utf8_str()) : "";
+}
+
+void wx_control_set_label_text(wxControl* self, const std::string& text) {
+    if (self) self->SetLabelText(wxString::FromUTF8(text.c_str()));
+}
+
+bool wx_control_set_label_markup(wxControl* self, const std::string& markup) {
+    return self ? self->SetLabelMarkup(wxString::FromUTF8(markup.c_str())) : false;
+}
+
+// wxControl::Command(wxCommandEvent&) takes the event by reference.
+// asMETHOD cannot deduce a pointer-to-reference parameter automatically;
+// the wrapper takes wx_command_event@ from script and dereferences.
+void wx_control_command(wxControl* self, wxCommandEvent* e) {
+    if (self && e) self->Command(*e);
 }
 
 // ---------------------------------------------------------------------------
@@ -215,7 +402,10 @@ bool wx_tlw_show_full_screen(wxTopLevelWindow* self, bool show) {
 }
 
 // ---------------------------------------------------------------------------
-// wxSizer.
+// wxSizer. Spacer-returning wrappers do not AddRef the sizer item: spacers
+// are owned by the sizer and the script-side handle is best left as a
+// transient view (matching how Add(window,...) does not return anything).
+// Add/Insert/Prepend without a return value mirror the existing pattern.
 // ---------------------------------------------------------------------------
 void wx_sizer_add_window(wxSizer* self, wxWindow* window, int proportion, int flag, int border) {
     if (self && window) self->Add(window, proportion, flag, border);
@@ -223,6 +413,18 @@ void wx_sizer_add_window(wxSizer* self, wxWindow* window, int proportion, int fl
 
 void wx_sizer_add_sizer(wxSizer* self, wxSizer* sizer, int proportion, int flag, int border) {
     if (self && sizer) self->Add(sizer, proportion, flag, border);
+}
+
+wxSizerItem* wx_sizer_add_spacer(wxSizer* self, int size) {
+    wxSizerItem* item = self ? self->AddSpacer(size) : nullptr;
+    if (item) AddRef(item);
+    return item;
+}
+
+wxSizerItem* wx_sizer_add_stretch_spacer(wxSizer* self, int prop) {
+    wxSizerItem* item = self ? self->AddStretchSpacer(prop) : nullptr;
+    if (item) AddRef(item);
+    return item;
 }
 
 bool wx_sizer_show_window(wxSizer* self, wxWindow* win, bool show, bool recursive) {
@@ -233,12 +435,44 @@ bool wx_sizer_show_sizer(wxSizer* self, wxSizer* s, bool show, bool recursive) {
     return self ? self->Show(s, show, recursive) : false;
 }
 
+bool wx_sizer_show_index(wxSizer* self, int index, bool show) {
+    return self ? self->Show(static_cast<size_t>(index), show) : false;
+}
+
 bool wx_sizer_hide_window(wxSizer* self, wxWindow* win, bool recursive) {
     return self ? self->Hide(win, recursive) : false;
 }
 
 bool wx_sizer_hide_sizer(wxSizer* self, wxSizer* s, bool recursive) {
     return self ? self->Hide(s, recursive) : false;
+}
+
+bool wx_sizer_hide_index(wxSizer* self, int index) {
+    return self ? self->Hide(static_cast<size_t>(index)) : false;
+}
+
+bool wx_sizer_is_shown_window(wxSizer* self, wxWindow* win) {
+    return self ? self->IsShown(win) : false;
+}
+
+bool wx_sizer_is_shown_sizer(wxSizer* self, wxSizer* s) {
+    return self ? self->IsShown(s) : false;
+}
+
+bool wx_sizer_is_shown_index(wxSizer* self, int index) {
+    return self ? self->IsShown(static_cast<size_t>(index)) : false;
+}
+
+void wx_sizer_show_all(wxSizer* self, bool show) {
+    if (self) self->Show(show);
+}
+
+void wx_sizer_show_items(wxSizer* self, bool show) {
+    if (self) self->ShowItems(show);
+}
+
+bool wx_sizer_are_any_items_shown(wxSizer* self) {
+    return self ? self->AreAnyItemsShown() : false;
 }
 
 bool wx_sizer_replace_window(wxSizer* self, wxWindow* oldwin, wxWindow* newwin, bool recursive) {
@@ -261,6 +495,18 @@ bool wx_sizer_detach_sizer(wxSizer* self, wxSizer* s) {
     return self ? self->Detach(s) : false;
 }
 
+bool wx_sizer_remove_sizer(wxSizer* self, wxSizer* s) {
+    return self ? self->Remove(s) : false;
+}
+
+void wx_sizer_clear(wxSizer* self, bool delete_windows) {
+    if (self) self->Clear(delete_windows);
+}
+
+void wx_sizer_delete_windows(wxSizer* self) {
+    if (self) self->DeleteWindows();
+}
+
 void wx_sizer_insert_window(wxSizer* self, int index, wxWindow* win, int proportion, int flag, int border) {
     if (self && win) self->Insert(index, win, proportion, flag, border);
 }
@@ -269,12 +515,36 @@ void wx_sizer_insert_sizer(wxSizer* self, int index, wxSizer* s, int proportion,
     if (self && s) self->Insert(index, s, proportion, flag, border);
 }
 
+wxSizerItem* wx_sizer_insert_spacer(wxSizer* self, int index, int size) {
+    wxSizerItem* item = self ? self->InsertSpacer(index, size) : nullptr;
+    if (item) AddRef(item);
+    return item;
+}
+
+wxSizerItem* wx_sizer_insert_stretch_spacer(wxSizer* self, int index, int prop) {
+    wxSizerItem* item = self ? self->InsertStretchSpacer(index, prop) : nullptr;
+    if (item) AddRef(item);
+    return item;
+}
+
 void wx_sizer_prepend_window(wxSizer* self, wxWindow* win, int proportion, int flag, int border) {
     if (self && win) self->Prepend(win, proportion, flag, border);
 }
 
 void wx_sizer_prepend_sizer(wxSizer* self, wxSizer* s, int proportion, int flag, int border) {
     if (self && s) self->Prepend(s, proportion, flag, border);
+}
+
+wxSizerItem* wx_sizer_prepend_spacer(wxSizer* self, int size) {
+    wxSizerItem* item = self ? self->PrependSpacer(size) : nullptr;
+    if (item) AddRef(item);
+    return item;
+}
+
+wxSizerItem* wx_sizer_prepend_stretch_spacer(wxSizer* self, int prop) {
+    wxSizerItem* item = self ? self->PrependStretchSpacer(prop) : nullptr;
+    if (item) AddRef(item);
+    return item;
 }
 
 wxSizerItem* wx_sizer_get_item_window(wxSizer* self, wxWindow* win) {
@@ -315,12 +585,52 @@ int wx_sizer_find_sizer(wxSizer* self, wxSizer* s) {
     return -1;
 }
 
-void wx_sizer_get_position(wxSizer* self, int& x, int& y) {
-    if (self) { wxPoint p = self->GetPosition(); x = p.x; y = p.y; }
+wx_point wx_sizer_get_position(wxSizer* self) {
+    return self ? self->GetPosition() : wxPoint(0, 0);
 }
 
-void wx_sizer_get_size(wxSizer* self, int& w, int& h) {
-    if (self) { wxSize s = self->GetSize(); w = s.x; h = s.y; }
+wx_size wx_sizer_get_size(wxSizer* self) {
+    return self ? self->GetSize() : wxSize(0, 0);
+}
+
+wx_size wx_sizer_get_min_size(wxSizer* self) {
+    return self ? self->GetMinSize() : wxSize(0, 0);
+}
+
+void wx_sizer_set_min_size(wxSizer* self, const wx_size& s) {
+    if (self) self->SetMinSize(s);
+}
+
+bool wx_sizer_set_item_min_size_window(wxSizer* self, wxWindow* win, const wx_size& s) {
+    return self ? self->SetItemMinSize(win, s) : false;
+}
+
+bool wx_sizer_set_item_min_size_sizer(wxSizer* self, wxSizer* sz, const wx_size& s) {
+    return self ? self->SetItemMinSize(sz, s) : false;
+}
+
+bool wx_sizer_set_item_min_size_index(wxSizer* self, int index, const wx_size& s) {
+    return self ? self->SetItemMinSize(static_cast<size_t>(index), s) : false;
+}
+
+wx_size wx_sizer_compute_fitting_client_size(wxSizer* self, wxWindow* win) {
+    return (self && win) ? self->ComputeFittingClientSize(win) : wxSize(0, 0);
+}
+
+wx_size wx_sizer_compute_fitting_window_size(wxSizer* self, wxWindow* win) {
+    return (self && win) ? self->ComputeFittingWindowSize(win) : wxSize(0, 0);
+}
+
+wx_size wx_sizer_fit(wxSizer* self, wxWindow* win) {
+    return (self && win) ? self->Fit(win) : wxSize(0, 0);
+}
+
+void wx_sizer_fit_inside(wxSizer* self, wxWindow* win) {
+    if (self && win) self->FitInside(win);
+}
+
+void wx_sizer_set_size_hints(wxSizer* self, wxWindow* win) {
+    if (self && win) self->SetSizeHints(win);
 }
 
 // ---------------------------------------------------------------------------
@@ -336,6 +646,74 @@ wxSizer* wx_sizer_item_get_sizer(wxSizerItem* self) {
     wxSizer* s = self ? self->GetSizer() : nullptr;
     if (s) AddRef(s);
     return s;
+}
+
+wx_size wx_sizer_item_get_size(wxSizerItem* self) {
+    return self ? self->GetSize() : wxSize(0, 0);
+}
+
+wx_size wx_sizer_item_calc_min(wxSizerItem* self) {
+    return self ? self->CalcMin() : wxSize(0, 0);
+}
+
+wx_size wx_sizer_item_get_min_size(wxSizerItem* self) {
+    return self ? self->GetMinSize() : wxSize(0, 0);
+}
+
+wx_size wx_sizer_item_get_min_size_with_border(wxSizerItem* self) {
+    return self ? self->GetMinSizeWithBorder() : wxSize(0, 0);
+}
+
+wx_size wx_sizer_item_get_max_size(wxSizerItem* self) {
+    return self ? self->GetMaxSize() : wxSize(-1, -1);
+}
+
+wx_size wx_sizer_item_get_max_size_with_border(wxSizerItem* self) {
+    return self ? self->GetMaxSizeWithBorder() : wxSize(-1, -1);
+}
+
+void wx_sizer_item_set_min_size(wxSizerItem* self, const wx_size& s) {
+    if (self) self->SetMinSize(s);
+}
+
+wx_rect wx_sizer_item_get_rect(wxSizerItem* self) {
+    return self ? self->GetRect() : wxRect(0, 0, 0, 0);
+}
+
+wx_point wx_sizer_item_get_position(wxSizerItem* self) {
+    return self ? self->GetPosition() : wxPoint(0, 0);
+}
+
+wx_size wx_sizer_item_get_spacer(wxSizerItem* self) {
+    return self ? self->GetSpacer() : wxSize(0, 0);
+}
+
+void wx_sizer_item_set_init_size(wxSizerItem* self, const wx_size& s) {
+    if (self) self->SetInitSize(s.x, s.y);
+}
+
+// SetRatio has three overloads in wxSizerItem: (int w, int h), (wxSize),
+// (float). The float overload is the most useful from script (e.g. 16/9
+// for a video preview), so we expose it under the no-suffix name and add
+// the wxSize variant under _size.
+void wx_sizer_item_set_ratio_size(wxSizerItem* self, const wx_size& s) {
+    if (self) self->SetRatio(s);
+}
+
+void wx_sizer_item_set_ratio_float(wxSizerItem* self, float ratio) {
+    if (self) self->SetRatio(ratio);
+}
+
+void wx_sizer_item_detach_window(wxSizerItem* self) {
+    if (self) self->DetachWindow();
+}
+
+void wx_sizer_item_detach_sizer(wxSizerItem* self) {
+    if (self) self->DetachSizer();
+}
+
+void wx_sizer_item_delete_windows(wxSizerItem* self) {
+    if (self) self->DeleteWindows();
 }
 
 // ---------------------------------------------------------------------------
@@ -459,8 +837,66 @@ void wx_text_entry_select_none(wxWindow* self) {
     if (auto e = GetEntry(self)) e->SelectNone();
 }
 
+bool wx_text_entry_has_selection(wxWindow* self) {
+    auto e = GetEntry(self);
+    return e ? e->HasSelection() : false;
+}
+
 void wx_text_entry_set_max_length(wxWindow* self, int len) {
     if (auto e = GetEntry(self)) e->SetMaxLength((unsigned long)len);
+}
+
+// ChangeValue is the silent counterpart of SetValue: no EVT_TEXT is fired.
+// Useful when programmatically syncing a text field from a model without
+// triggering the user-edit handler.
+void wx_text_entry_change_value(wxWindow* self, const std::string& value) {
+    if (auto e = GetEntry(self))
+        e->ChangeValue(wxString::FromUTF8(value.c_str()));
+}
+
+int wx_text_entry_get_insertion_point(wxWindow* self) {
+    auto e = GetEntry(self);
+    return e ? static_cast<int>(e->GetInsertionPoint()) : 0;
+}
+
+void wx_text_entry_set_insertion_point(wxWindow* self, int pos) {
+    if (auto e = GetEntry(self)) e->SetInsertionPoint(static_cast<long>(pos));
+}
+
+void wx_text_entry_set_insertion_point_end(wxWindow* self) {
+    if (auto e = GetEntry(self)) e->SetInsertionPointEnd();
+}
+
+int wx_text_entry_get_last_position(wxWindow* self) {
+    auto e = GetEntry(self);
+    return e ? static_cast<int>(e->GetLastPosition()) : 0;
+}
+
+void wx_text_entry_force_upper(wxWindow* self) {
+    if (auto e = GetEntry(self)) e->ForceUpper();
+}
+
+std::string wx_text_entry_get_hint(wxWindow* self) {
+    auto e = GetEntry(self);
+    return e ? std::string(e->GetHint().utf8_str()) : "";
+}
+
+void wx_text_entry_set_hint(wxWindow* self, const std::string& hint) {
+    if (auto e = GetEntry(self)) {
+        // The bool result from wxTextEntry::SetHint is intentionally
+        // discarded — see common.h for the rationale.
+        e->SetHint(wxString::FromUTF8(hint.c_str()));
+    }
+}
+
+bool wx_text_entry_auto_complete_file_names(wxWindow* self) {
+    auto e = GetEntry(self);
+    return e ? e->AutoCompleteFileNames() : false;
+}
+
+bool wx_text_entry_auto_complete_directories(wxWindow* self) {
+    auto e = GetEntry(self);
+    return e ? e->AutoCompleteDirectories() : false;
 }
 
 // ---------------------------------------------------------------------------
