@@ -86,7 +86,14 @@ jobs:
             '/I', 'lib/mswu',
             '/I', "$env:GITHUB_WORKSPACE/as_include",
             '/DUNICODE', '/D_UNICODE', '/DWXUSINGDLL', '/D__WXMSW__',
-            '/D_CRT_SECURE_NO_WARNINGS'
+            '/D_CRT_SECURE_NO_WARNINGS',
+            # ANGELSCRIPT_DLL_MANUAL_IMPORT switches angelscript.h from
+            # extern-function declarations to extern-function-pointer
+            # declarations populated by prepare_plugin() at runtime.
+            # nvgt_plugin.h sets this for every TU that includes it,
+            # but the vendored scriptarray.cpp does not — so define it
+            # from the command line for every source uniformly.
+            '/DANGELSCRIPT_DLL_MANUAL_IMPORT'
           )
 
           New-Item -ItemType Directory -Force -Path obj | Out-Null
