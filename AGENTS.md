@@ -225,6 +225,29 @@ brings up wxWidgets if it is not running yet (`wxApp::SetInstance` +
 script (typically every frame) to drain the wx event queue. On Windows
 it also pumps the native message loop with `PeekMessage`.
 
+**wxEntryStart / wxEntryCleanup pairing.** `WxManager()` calls
+`wxEntryStart` only when no `wxApp` is running yet, and flips
+`g_wx_started_by_plugin = true` so the plugin remembers that *it* —
+not NVGT or some other host — owns the wx lifecycle. `wxEntryCleanup`
+is paired with that through `g_wx_lifecycle`, a static `WxLifecycleGuard`
+whose destructor runs at C++ static deinitialisation:
+
+- On Windows that fires from `DllMain` on `DLL_PROCESS_DETACH`, after
+  AngelScript has released every wx object, which is the safe moment to
+  tear wx down.
+- Pairing the cleanup with `~WxManager()` directly would be wrong:
+  WxManager is a *value* type, and a script that lets `wx` go out of
+  scope while wx-windows are still alive would otherwise nuke `wxApp`
+  out from under them.
+- `nvgt_plugin.h` does not expose a per-plugin shutdown hook (its
+  public API is just `plugin_main()` plus the function-pointer table
+  via `prepare_plugin()`), so the static-destructor route is the only
+  portable hook.
+
+If a future host pre-creates a `wxApp` before our plugin is loaded,
+`g_wx_started_by_plugin` stays false and the guard's destructor is a
+no-op; the host owns the lifecycle in that case.
+
 ### Reference counting
 
 The plugin maintains its own reference counter for every wx object
@@ -533,7 +556,7 @@ dangling pointer the bridge cannot rescue.
 
 ## Value-type conventions (geometry and colour)
 
-The bridge exposes four POD-ish value types to scripts:
+The bridge exposes five value types to scripts:
 
 - `wx_point` — alias of `wxPoint` (two `int`s, `x` / `y`).
 - `wx_size`  — alias of `wxSize` (two `int`s, exposed as `width` /
@@ -546,6 +569,19 @@ The bridge exposes four POD-ish value types to scripts:
   it as a fixed-property AS value type would crash on construction
   in some builds. Convert at the boundary with `to_wx(wx_colour)` and
   `from_wx(wxColour)`; both are `inline` in `common.h`.
+- `wx_font` — value-type wrapper around `wxFont` itself. wxFont's
+  payload is a `wxGDIObject` pointer and the class is reference-counted
+  internally, so copy/destruct are pointer-cost; `asGetTypeTraits<wxFont>()`
+  derives the right CDAK trait flags automatically (do not spell them
+  out by hand). Properties: `point_size` (int), `pixel_size` (`wx_size`),
+  `face_name` (`string`), `family` / `style` / `weight` (int — see the
+  font-enum note below), `underlined` (bool), `strikethrough` (bool).
+  Plain methods: `is_ok`, `is_fixed_width`, `bold`, `italic`,
+  `larger`, `smaller`, `scaled(float)`, `get_base_font`. The wxFont
+  modifier methods `Underlined()` and `Strikethrough()` are intentionally
+  **not** registered as AS methods because they would collide with
+  the bool properties of the same name; scripts that need a copy can
+  do `wx_font copy = font; copy.underlined = true;`.
 
 Why aliases rather than fresh types for the first three: `wxPoint`,
 `wxSize` and `wxRect` are documented by upstream as plain `int`
@@ -609,13 +645,40 @@ that owns them differs. Scripts continue to write
 converts enum values to `int` for `int`-typed parameters; OR-ing
 across families is therefore still legal at the call site.
 
+## Font enums (`wx_font_family` / `wx_font_style` / `wx_font_weight`)
+
+`wxFontFamily`, `wxFontStyle` and `wxFontWeight` are strongly-typed C++
+enums but the bridge exposes them as plain integer enums on the AS side
+(`wx_font_family`, `wx_font_style`, `wx_font_weight`). Reasons:
+
+- AngelScript does not have strongly-typed enums; an enum value is
+  always an `int`. Registering each wx enum as a fresh AS enum is
+  about as much typing as a single shared int and lets scripts pass
+  the values straight through to `wx_font`'s constructor and setters.
+- The wx enum constants (`wxFONTFAMILY_*`, `wxFONTSTYLE_*`,
+  `wxFONTWEIGHT_*`) are documented as stable across wx releases and
+  are even part of the serialized form of `wxFont` (`wxToString` /
+  `wxFromString`), so propagating their numeric values through the
+  bridge is safe.
+
+The corresponding `wx_font` setters (`set_family`, `set_style`,
+`set_weight`) take an `int` on the AS side and `static_cast` it back
+to the strongly-typed wx enum inside the helper. Scripts that pass a
+`wx_font_family` enum value implicitly convert to `int`, no extra
+cast is needed in user code.
+
+`wxFont`'s legacy constructor that takes raw ints for family / style /
+weight is the only ctor exposed to AS for the same reason — it accepts
+the ints natively and casts inside.
+
 ## Audit summary (current bridge surface)
 
-- **`wxWindow`** — geometry/colour as value-type properties; show /
-  hide / enable / focus / layout / centre / fit / refresh / scroll /
-  raise / lower / freeze / thaw / capture / drag-accept / dpi-scale /
-  parent / grandparent / sizer / window-style / extra-style / tooltip
-  / name / help-text / text-extent / client-screen conversions.
+- **`wxWindow`** — geometry/colour as value-type properties; `font`
+  property (`wx_font` value type, get/set); show / hide / enable /
+  focus / layout / centre / fit / refresh / scroll / raise / lower /
+  freeze / thaw / capture / drag-accept / dpi-scale / parent /
+  grandparent / sizer / window-style / extra-style / tooltip / name /
+  help-text / text-extent / client-screen conversions.
   Not exposed yet: hit-testing, child-window enumeration, accelerator
   tables, validators, layout direction, transparency.
 - **`wxTopLevelWindow`** — title / full-screen / maximize / iconize /
@@ -652,6 +715,15 @@ across families is therefore still legal at the call site.
   (key code, unicode, modifier helpers), `wx_mouse_event` (xy,
   buttons, dclick), `wx_command_event` (string / int / extra-long
   / selection / is-checked / is-selection).
+- **`wxFont`** — exposed as the `wx_font` value type. Default + full
+  ctor (size / family / style / weight / underlined / face_name) +
+  copy ctor + `opAssign`. Properties: `point_size`, `pixel_size`,
+  `face_name`, `family` / `style` / `weight` (int), `underlined`,
+  `strikethrough`. Methods: `is_ok`, `is_fixed_width`, `bold`,
+  `italic`, `larger`, `smaller`, `scaled`, `get_base_font`. Not
+  exposed yet: native-font-info round-trip (`GetNativeFontInfo` /
+  `wxFromString`), encoding, fractional point sizes, font-info
+  builders.
 - **Manager** — `wx::update`, `wx::create_{frame,button,check_box,box_sizer,
   panel,static_text,text_control,radio_button}`. `create_frame` takes
   a `wx_size` for the initial window size.
@@ -661,13 +733,17 @@ rename something here, update this section in the same PR.
 
 ## Roadmap (high-level)
 
-- **Phase A (this PR) — value types and per-control style enums.**
+- **Phase A (done) — value types and per-control style enums.**
   `wx_point/size/rect/colour` are registered as AS value types and
   every geometry / colour accessor uses them as properties; the
   monolithic `wx_style` enum is split into one enum per control
   family. Breaking change vs. earlier PRs.
-- **Phase 0 — remaining foundation work:** `wx_font`,
-  `wxEntryCleanup()` on shutdown.
+- **Phase 0 (this PR) — remaining foundation work.** `wx_font` value
+  type with full property + modifier surface, `wx_window.font`
+  property, `wx_font_family` / `wx_font_style` / `wx_font_weight`
+  enums, `wxEntryCleanup()` paired with `wxEntryStart()` through a
+  static `WxLifecycleGuard` (the function-level destructor that
+  fires on `DLL_PROCESS_DETACH`).
 - **Phase 1 — basic GUI:** the rest of the sizers; dialogs
   (`wx_dialog`, `wx_message_dialog`, `wx_file_dialog`, …); selectors
   (`wx_choice`, `wx_combo_box`, `wx_list_box`, `wx_radio_box`); range
