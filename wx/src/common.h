@@ -27,6 +27,10 @@
 #include <wx/gbsizer.h>
 #include <wx/wrapsizer.h>
 #include <wx/statbox.h>
+#include <wx/choice.h>
+#include <wx/combobox.h>
+#include <wx/listbox.h>
+#include <wx/radiobox.h>
 
 // nvgt_plugin.h emits *definitions* of plugin_version() and the
 // asGetLibraryVersion / asAcquireExclusiveLock / nvgt_wait / ... function
@@ -42,6 +46,15 @@
 #define NVGT_PLUGIN_INCLUDE
 #endif
 #include "../../../src/nvgt_plugin.h"
+
+// CScriptArray (the AngelScript add-on registered by NVGT as `array<T>`)
+// is vendored locally as wx/src/scriptarray.{h,cpp}. The plugin needs
+// the class definition both for reading parameters of type `string[]@`
+// passed in by scripts and for constructing return values like
+// `int[]@` from wxArrayInt. AGENTS.md documents why scriptarray.cpp
+// has to be compiled into the plugin even though the array type is
+// already registered by NVGT.
+#include "scriptarray.h"
 
 // ---------------------------------------------------------------------------
 // Value types exposed to AngelScript.
@@ -189,6 +202,13 @@ template<typename T> wxControl* to_control(T* obj) { return static_cast<wxContro
 template<typename T> wxSizer* to_sizer(T* obj) { return static_cast<wxSizer*>(obj); }
 template<typename T> wxTopLevelWindow* to_tlw(T* obj) { return static_cast<wxTopLevelWindow*>(obj); }
 template<typename T> wxWindow* to_text_entry_as_win(T* obj) { return static_cast<wxWindow*>(obj); }
+// wxItemContainer is a mix-in (not a wxWindow). The bridge models it
+// as a wx_window-shaped handle and dynamic_casts to the mix-in
+// interface inside each wrapper — see helpers.cpp/GetItemContainer.
+// The cast helper below is the opImplCast for that handle: AS hands
+// the concrete control's pointer to the wrapper as a wxWindow*, so
+// the cast just slices to wxWindow.
+template<typename T> wxWindow* to_item_container_as_win(T* obj) { return static_cast<wxWindow*>(obj); }
 
 template<typename T>
 T* window_to_derived(wxWindow* win) {
@@ -546,6 +566,115 @@ wxRadioButton* wx_radio_button_get_first_in_group(wxRadioButton* self);
 wxRadioButton* wx_radio_button_get_last_in_group(wxRadioButton* self);
 wxRadioButton* wx_radio_button_get_next_in_group(wxRadioButton* self);
 wxRadioButton* wx_radio_button_get_previous_in_group(wxRadioButton* self);
+
+// ---------------------------------------------------------------------------
+// CScriptArray <-> wxArrayString / wxArrayInt conversion helpers used by
+// every selector control. Live in helpers.cpp; declared here so manager.cpp
+// can reuse them in the create_* factories without including helpers.cpp.
+// ---------------------------------------------------------------------------
+wxArrayString as_array_to_wx_strings(CScriptArray* items);
+CScriptArray* wx_strings_to_as_array(const wxArrayString& src);
+CScriptArray* wx_ints_to_as_array(const wxArrayInt& src);
+
+// ---------------------------------------------------------------------------
+// wxItemContainer (mix-in). Like wxTextEntry, the bridge smuggles a
+// wxWindow* through the wx_item_container handle and dynamic_casts back
+// to wxItemContainer* in each method. Used for wx_choice / wx_combo_box
+// / wx_list_box (all derive from wxControlWithItems → wxItemContainer).
+// wxRadioBox derives from wxItemContainerImmutable instead, exposes a
+// stricter subset of this surface, and is registered separately.
+//
+// wxClientData is intentionally NOT exposed: the bridge has no general
+// mechanism for passing arbitrary script handles through wxObject, so
+// every variant of Append/Insert/Set that takes a wxClientData** is
+// silently skipped. Scripts that need to associate side-data with an
+// item maintain a parallel array on the script side keyed by index.
+// ---------------------------------------------------------------------------
+wxItemContainer* GetItemContainer(wxWindow* win);
+wxItemContainerImmutable* GetItemContainerImmutable(wxWindow* win);
+
+int wx_item_container_get_count(wxWindow* self);
+bool wx_item_container_is_empty(wxWindow* self);
+std::string wx_item_container_get_string(wxWindow* self, int n);
+void wx_item_container_set_string(wxWindow* self, int n, const std::string& s);
+int wx_item_container_find_string(wxWindow* self, const std::string& s, bool case_sensitive);
+int wx_item_container_get_selection(wxWindow* self);
+void wx_item_container_set_selection(wxWindow* self, int n);
+std::string wx_item_container_get_string_selection(wxWindow* self);
+bool wx_item_container_set_string_selection(wxWindow* self, const std::string& s);
+CScriptArray* wx_item_container_get_strings(wxWindow* self);
+bool wx_item_container_is_sorted(wxWindow* self);
+int wx_item_container_append(wxWindow* self, const std::string& s);
+int wx_item_container_append_many(wxWindow* self, CScriptArray* items);
+int wx_item_container_insert(wxWindow* self, const std::string& s, int pos);
+int wx_item_container_insert_many(wxWindow* self, CScriptArray* items, int pos);
+void wx_item_container_set(wxWindow* self, CScriptArray* items);
+void wx_item_container_clear(wxWindow* self);
+void wx_item_container_delete(wxWindow* self, int n);
+
+// ---------------------------------------------------------------------------
+// wxChoice. Container surface comes from wx_item_container; this is the
+// per-control extension (current selection during a popup, columns).
+// ---------------------------------------------------------------------------
+int wx_choice_get_current_selection(wxChoice* self);
+int wx_choice_get_columns(wxChoice* self);
+void wx_choice_set_columns(wxChoice* self, int n);
+
+// ---------------------------------------------------------------------------
+// wxComboBox. Inherits both wxItemContainer (the dropdown list) and
+// wxTextEntry (the text field). The per-control surface here only covers
+// wxComboBox-specific accessors not on either mix-in.
+// ---------------------------------------------------------------------------
+int wx_combo_box_get_current_selection(wxComboBox* self);
+void wx_combo_box_popup(wxComboBox* self);
+void wx_combo_box_dismiss(wxComboBox* self);
+
+// ---------------------------------------------------------------------------
+// wxListBox. Multi-selection accessors live here (wxItemContainer is
+// strictly single-selection). Insert(items, pos) is exposed through
+// wx_item_container as append_many/insert_many; the wxListBoxBase
+// alias InsertItems is just a thin wrapper and not separately bound.
+// ---------------------------------------------------------------------------
+bool wx_list_box_is_selected(wxListBox* self, int n);
+void wx_list_box_set_selection_multi(wxListBox* self, int n, bool select);
+void wx_list_box_deselect(wxListBox* self, int n);
+void wx_list_box_deselect_all(wxListBox* self, int leave);
+CScriptArray* wx_list_box_get_selections(wxListBox* self);
+void wx_list_box_set_first_item(wxListBox* self, int n);
+void wx_list_box_set_first_item_string(wxListBox* self, const std::string& s);
+void wx_list_box_ensure_visible(wxListBox* self, int n);
+int wx_list_box_get_top_item(wxListBox* self);
+int wx_list_box_get_count_per_page(wxListBox* self);
+void wx_list_box_append_and_ensure_visible(wxListBox* self, const std::string& s);
+bool wx_list_box_has_multiple_selection(wxListBox* self);
+int wx_list_box_hit_test(wxListBox* self, const wx_point& pt);
+
+// ---------------------------------------------------------------------------
+// wxRadioBox. Derives from wxItemContainerImmutable, NOT wxItemContainer,
+// so it cannot be cast to wx_item_container; the read-only half of the
+// container surface is duplicated directly on wx_radio_box. Mutable
+// Append/Insert/Clear/Delete are intentionally absent — wxRadioBox
+// freezes its set of buttons at construction.
+// ---------------------------------------------------------------------------
+int wx_radio_box_get_count(wxRadioBox* self);
+bool wx_radio_box_is_empty(wxRadioBox* self);
+std::string wx_radio_box_get_string(wxRadioBox* self, int n);
+void wx_radio_box_set_string(wxRadioBox* self, int n, const std::string& s);
+int wx_radio_box_find_string(wxRadioBox* self, const std::string& s, bool case_sensitive);
+int wx_radio_box_get_selection(wxRadioBox* self);
+void wx_radio_box_set_selection(wxRadioBox* self, int n);
+std::string wx_radio_box_get_string_selection(wxRadioBox* self);
+bool wx_radio_box_set_string_selection(wxRadioBox* self, const std::string& s);
+bool wx_radio_box_enable_item(wxRadioBox* self, int n, bool enable);
+bool wx_radio_box_show_item(wxRadioBox* self, int n, bool show);
+bool wx_radio_box_is_item_enabled(wxRadioBox* self, int n);
+bool wx_radio_box_is_item_shown(wxRadioBox* self, int n);
+int wx_radio_box_get_column_count(wxRadioBox* self);
+int wx_radio_box_get_row_count(wxRadioBox* self);
+std::string wx_radio_box_get_item_help_text(wxRadioBox* self, int n);
+void wx_radio_box_set_item_help_text(wxRadioBox* self, int n, const std::string& s);
+int wx_radio_box_get_item_from_point(wxRadioBox* self, const wx_point& pt);
+int wx_radio_box_get_next_item(wxRadioBox* self, int item, int direction, int style);
 
 // ---------------------------------------------------------------------------
 // wxFont adapters (helpers.cpp). wxFont is exposed as a value type

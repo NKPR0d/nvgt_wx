@@ -1250,3 +1250,376 @@ wxFont wx_font_scaled(const wxFont* self, float factor) {
 wxFont wx_font_get_base_font(const wxFont* self) {
     return self ? self->GetBaseFont() : wxFont();
 }
+
+// ---------------------------------------------------------------------------
+// CScriptArray <-> wxArrayString / wxArrayInt conversion helpers used by
+// every selector control. CScriptArray is the AngelScript add-on that
+// backs the `array<T>` template; NVGT registers it once on its engine,
+// the plugin links the same source (wx/src/scriptarray.cpp) so the
+// `class CScriptArray` definition is visible inside this translation
+// unit. See AGENTS.md "scriptarray vendoring" for the binary-compat
+// rationale.
+// ---------------------------------------------------------------------------
+wxArrayString as_array_to_wx_strings(CScriptArray* items) {
+    wxArrayString out;
+    if (!items) return out;
+    asUINT n = items->GetSize();
+    out.Alloc(n);
+    for (asUINT i = 0; i < n; ++i) {
+        const std::string* s = static_cast<const std::string*>(items->At(i));
+        if (s) out.Add(wxString::FromUTF8(s->c_str()));
+    }
+    return out;
+}
+
+CScriptArray* wx_strings_to_as_array(const wxArrayString& src) {
+    asIScriptContext* ctx = asGetActiveContext();
+    if (!ctx) return nullptr;
+    asIScriptEngine* engine = ctx->GetEngine();
+    asITypeInfo* ti = engine ? engine->GetTypeInfoByDecl("array<string>") : nullptr;
+    if (!ti) return nullptr;
+    CScriptArray* arr = CScriptArray::Create(ti, static_cast<asUINT>(src.size()));
+    if (!arr) return nullptr;
+    for (asUINT i = 0; i < arr->GetSize(); ++i) {
+        std::string s(src[i].utf8_str());
+        arr->SetValue(i, &s);
+    }
+    return arr;
+}
+
+CScriptArray* wx_ints_to_as_array(const wxArrayInt& src) {
+    asIScriptContext* ctx = asGetActiveContext();
+    if (!ctx) return nullptr;
+    asIScriptEngine* engine = ctx->GetEngine();
+    asITypeInfo* ti = engine ? engine->GetTypeInfoByDecl("array<int>") : nullptr;
+    if (!ti) return nullptr;
+    CScriptArray* arr = CScriptArray::Create(ti, static_cast<asUINT>(src.size()));
+    if (!arr) return nullptr;
+    for (asUINT i = 0; i < arr->GetSize(); ++i) {
+        int v = src[i];
+        arr->SetValue(i, &v);
+    }
+    return arr;
+}
+
+// ---------------------------------------------------------------------------
+// wxItemContainer / wxItemContainerImmutable (mix-in). Same trick as
+// wxTextEntry: each wrapper takes a wxWindow* and dynamic_casts to the
+// appropriate mix-in interface. The split between the two helpers
+// exists because wxRadioBox derives only from wxItemContainerImmutable
+// and would otherwise dynamic_cast to nullptr through GetItemContainer.
+// Mutators always go through GetItemContainer and silently no-op for
+// immutable controls; immutable accessors go through
+// GetItemContainerImmutable and work on the full wxItemContainer
+// hierarchy because wxItemContainer derives from wxItemContainerImmutable.
+//
+// Bounds checks on indexes use unsigned comparisons against GetCount();
+// negative indexes coming from script (e.g. wxNOT_FOUND) short-circuit
+// to a no-op rather than crashing the wxWidgets assert in debug
+// builds. wxItemContainer asserts on out-of-range indexes in debug;
+// the bridge is library code that must not crash even when the script
+// is wrong.
+// ---------------------------------------------------------------------------
+wxItemContainer* GetItemContainer(wxWindow* win) {
+    return dynamic_cast<wxItemContainer*>(win);
+}
+
+wxItemContainerImmutable* GetItemContainerImmutable(wxWindow* win) {
+    return dynamic_cast<wxItemContainerImmutable*>(win);
+}
+
+int wx_item_container_get_count(wxWindow* self) {
+    auto ic = GetItemContainerImmutable(self);
+    return ic ? static_cast<int>(ic->GetCount()) : 0;
+}
+
+bool wx_item_container_is_empty(wxWindow* self) {
+    auto ic = GetItemContainerImmutable(self);
+    return ic ? ic->IsEmpty() : true;
+}
+
+std::string wx_item_container_get_string(wxWindow* self, int n) {
+    auto ic = GetItemContainerImmutable(self);
+    if (!ic || n < 0 || static_cast<unsigned>(n) >= ic->GetCount()) return "";
+    return std::string(ic->GetString(static_cast<unsigned>(n)).utf8_str());
+}
+
+void wx_item_container_set_string(wxWindow* self, int n, const std::string& s) {
+    auto ic = GetItemContainerImmutable(self);
+    if (!ic || n < 0 || static_cast<unsigned>(n) >= ic->GetCount()) return;
+    ic->SetString(static_cast<unsigned>(n), wxString::FromUTF8(s.c_str()));
+}
+
+int wx_item_container_find_string(wxWindow* self, const std::string& s, bool case_sensitive) {
+    auto ic = GetItemContainerImmutable(self);
+    if (!ic) return wxNOT_FOUND;
+    return ic->FindString(wxString::FromUTF8(s.c_str()), case_sensitive);
+}
+
+int wx_item_container_get_selection(wxWindow* self) {
+    auto ic = GetItemContainerImmutable(self);
+    return ic ? ic->GetSelection() : wxNOT_FOUND;
+}
+
+void wx_item_container_set_selection(wxWindow* self, int n) {
+    if (auto ic = GetItemContainerImmutable(self)) ic->SetSelection(n);
+}
+
+std::string wx_item_container_get_string_selection(wxWindow* self) {
+    auto ic = GetItemContainerImmutable(self);
+    return ic ? std::string(ic->GetStringSelection().utf8_str()) : "";
+}
+
+bool wx_item_container_set_string_selection(wxWindow* self, const std::string& s) {
+    auto ic = GetItemContainerImmutable(self);
+    return ic ? ic->SetStringSelection(wxString::FromUTF8(s.c_str())) : false;
+}
+
+CScriptArray* wx_item_container_get_strings(wxWindow* self) {
+    auto ic = GetItemContainerImmutable(self);
+    return wx_strings_to_as_array(ic ? ic->GetStrings() : wxArrayString());
+}
+
+bool wx_item_container_is_sorted(wxWindow* self) {
+    // IsSorted is declared on wxItemContainer (mutable), not on the
+    // immutable parent — even though it is conceptually a read-only
+    // accessor. Use GetItemContainer rather than the Immutable form.
+    auto ic = GetItemContainer(self);
+    return ic ? ic->IsSorted() : false;
+}
+
+int wx_item_container_append(wxWindow* self, const std::string& s) {
+    auto ic = GetItemContainer(self);
+    return ic ? static_cast<int>(ic->Append(wxString::FromUTF8(s.c_str()))) : wxNOT_FOUND;
+}
+
+int wx_item_container_append_many(wxWindow* self, CScriptArray* items) {
+    auto ic = GetItemContainer(self);
+    return ic ? ic->Append(as_array_to_wx_strings(items)) : wxNOT_FOUND;
+}
+
+int wx_item_container_insert(wxWindow* self, const std::string& s, int pos) {
+    auto ic = GetItemContainer(self);
+    if (!ic || pos < 0) return wxNOT_FOUND;
+    return static_cast<int>(ic->Insert(wxString::FromUTF8(s.c_str()), static_cast<unsigned>(pos)));
+}
+
+int wx_item_container_insert_many(wxWindow* self, CScriptArray* items, int pos) {
+    auto ic = GetItemContainer(self);
+    if (!ic || pos < 0) return wxNOT_FOUND;
+    return ic->Insert(as_array_to_wx_strings(items), static_cast<unsigned>(pos));
+}
+
+void wx_item_container_set(wxWindow* self, CScriptArray* items) {
+    auto ic = GetItemContainer(self);
+    if (!ic) return;
+    ic->Set(as_array_to_wx_strings(items));
+}
+
+void wx_item_container_clear(wxWindow* self) {
+    if (auto ic = GetItemContainer(self)) ic->Clear();
+}
+
+void wx_item_container_delete(wxWindow* self, int n) {
+    auto ic = GetItemContainer(self);
+    if (!ic || n < 0 || static_cast<unsigned>(n) >= ic->GetCount()) return;
+    ic->Delete(static_cast<unsigned>(n));
+}
+
+// ---------------------------------------------------------------------------
+// wxChoice. The container surface comes through wx_item_container; the
+// per-control wrappers below cover the small wxChoice-specific surface.
+// GetCurrentSelection differs from GetSelection only while the
+// dropdown is open: it returns the item the user is hovering over,
+// not the committed selection.
+// ---------------------------------------------------------------------------
+int wx_choice_get_current_selection(wxChoice* self) {
+    return self ? self->GetCurrentSelection() : wxNOT_FOUND;
+}
+
+int wx_choice_get_columns(wxChoice* self) {
+    return self ? self->GetColumns() : 1;
+}
+
+void wx_choice_set_columns(wxChoice* self, int n) {
+    if (self) self->SetColumns(n);
+}
+
+// ---------------------------------------------------------------------------
+// wxComboBox. The text-side surface comes through wx_text_entry, the
+// list-side surface through wx_item_container; the wrappers below cover
+// the wxComboBox-specific extras (current-selection accessor, programmatic
+// dropdown control). Popup/Dismiss are virtual no-ops on most platforms
+// (wxMSW implements them) but are exposed so cross-platform scripts can
+// call them unconditionally.
+// ---------------------------------------------------------------------------
+int wx_combo_box_get_current_selection(wxComboBox* self) {
+    return self ? self->GetCurrentSelection() : wxNOT_FOUND;
+}
+
+void wx_combo_box_popup(wxComboBox* self) {
+    if (self) self->Popup();
+}
+
+void wx_combo_box_dismiss(wxComboBox* self) {
+    if (self) self->Dismiss();
+}
+
+// ---------------------------------------------------------------------------
+// wxListBox. Multi-selection accessors live here because wxItemContainer
+// is single-selection; calling them on a single-selection list box is
+// undefined per wx docs but harmless on MSW. The wxListBox::SetSelection
+// overload that takes a bool is registered as set_selection_multi to
+// avoid clashing with the wx_item_container set_selection on the AS side.
+// ---------------------------------------------------------------------------
+bool wx_list_box_is_selected(wxListBox* self, int n) {
+    if (!self || n < 0 || static_cast<unsigned>(n) >= self->GetCount()) return false;
+    return self->IsSelected(n);
+}
+
+void wx_list_box_set_selection_multi(wxListBox* self, int n, bool select) {
+    if (!self) return;
+    self->SetSelection(n, select);
+}
+
+void wx_list_box_deselect(wxListBox* self, int n) {
+    if (!self || n < 0 || static_cast<unsigned>(n) >= self->GetCount()) return;
+    self->Deselect(n);
+}
+
+void wx_list_box_deselect_all(wxListBox* self, int leave) {
+    if (self) self->DeselectAll(leave);
+}
+
+CScriptArray* wx_list_box_get_selections(wxListBox* self) {
+    wxArrayInt selections;
+    if (self) self->GetSelections(selections);
+    return wx_ints_to_as_array(selections);
+}
+
+void wx_list_box_set_first_item(wxListBox* self, int n) {
+    if (!self || n < 0 || static_cast<unsigned>(n) >= self->GetCount()) return;
+    self->SetFirstItem(n);
+}
+
+void wx_list_box_set_first_item_string(wxListBox* self, const std::string& s) {
+    if (self) self->SetFirstItem(wxString::FromUTF8(s.c_str()));
+}
+
+void wx_list_box_ensure_visible(wxListBox* self, int n) {
+    if (!self || n < 0 || static_cast<unsigned>(n) >= self->GetCount()) return;
+    self->EnsureVisible(n);
+}
+
+int wx_list_box_get_top_item(wxListBox* self) {
+    return self ? self->GetTopItem() : -1;
+}
+
+int wx_list_box_get_count_per_page(wxListBox* self) {
+    return self ? self->GetCountPerPage() : -1;
+}
+
+void wx_list_box_append_and_ensure_visible(wxListBox* self, const std::string& s) {
+    if (self) self->AppendAndEnsureVisible(wxString::FromUTF8(s.c_str()));
+}
+
+bool wx_list_box_has_multiple_selection(wxListBox* self) {
+    return self ? self->HasMultipleSelection() : false;
+}
+
+int wx_list_box_hit_test(wxListBox* self, const wx_point& pt) {
+    return self ? self->HitTest(pt) : wxNOT_FOUND;
+}
+
+// ---------------------------------------------------------------------------
+// wxRadioBox. Derives from wxItemContainerImmutable, so it shares the
+// read-only half of wxItemContainer's surface but cannot be cast to
+// wxItemContainer. To keep the script-side API consistent the read-only
+// container methods are duplicated directly on wx_radio_box. Mutable
+// Append/Insert/Clear/Delete are intentionally absent — wxRadioBox
+// freezes its set of buttons at construction.
+// ---------------------------------------------------------------------------
+int wx_radio_box_get_count(wxRadioBox* self) {
+    return self ? static_cast<int>(self->GetCount()) : 0;
+}
+
+bool wx_radio_box_is_empty(wxRadioBox* self) {
+    return self ? self->GetCount() == 0 : true;
+}
+
+std::string wx_radio_box_get_string(wxRadioBox* self, int n) {
+    if (!self || n < 0 || static_cast<unsigned>(n) >= self->GetCount()) return "";
+    return std::string(self->GetString(static_cast<unsigned>(n)).utf8_str());
+}
+
+void wx_radio_box_set_string(wxRadioBox* self, int n, const std::string& s) {
+    if (!self || n < 0 || static_cast<unsigned>(n) >= self->GetCount()) return;
+    self->SetString(static_cast<unsigned>(n), wxString::FromUTF8(s.c_str()));
+}
+
+int wx_radio_box_find_string(wxRadioBox* self, const std::string& s, bool case_sensitive) {
+    return self ? self->FindString(wxString::FromUTF8(s.c_str()), case_sensitive) : wxNOT_FOUND;
+}
+
+int wx_radio_box_get_selection(wxRadioBox* self) {
+    return self ? self->GetSelection() : wxNOT_FOUND;
+}
+
+void wx_radio_box_set_selection(wxRadioBox* self, int n) {
+    if (self) self->SetSelection(n);
+}
+
+std::string wx_radio_box_get_string_selection(wxRadioBox* self) {
+    return self ? std::string(self->GetStringSelection().utf8_str()) : "";
+}
+
+bool wx_radio_box_set_string_selection(wxRadioBox* self, const std::string& s) {
+    return self ? self->SetStringSelection(wxString::FromUTF8(s.c_str())) : false;
+}
+
+bool wx_radio_box_enable_item(wxRadioBox* self, int n, bool enable) {
+    if (!self || n < 0 || static_cast<unsigned>(n) >= self->GetCount()) return false;
+    return self->Enable(static_cast<unsigned>(n), enable);
+}
+
+bool wx_radio_box_show_item(wxRadioBox* self, int n, bool show) {
+    if (!self || n < 0 || static_cast<unsigned>(n) >= self->GetCount()) return false;
+    return self->Show(static_cast<unsigned>(n), show);
+}
+
+bool wx_radio_box_is_item_enabled(wxRadioBox* self, int n) {
+    if (!self || n < 0 || static_cast<unsigned>(n) >= self->GetCount()) return false;
+    return self->IsItemEnabled(static_cast<unsigned>(n));
+}
+
+bool wx_radio_box_is_item_shown(wxRadioBox* self, int n) {
+    if (!self || n < 0 || static_cast<unsigned>(n) >= self->GetCount()) return false;
+    return self->IsItemShown(static_cast<unsigned>(n));
+}
+
+int wx_radio_box_get_column_count(wxRadioBox* self) {
+    return self ? static_cast<int>(self->GetColumnCount()) : 0;
+}
+
+int wx_radio_box_get_row_count(wxRadioBox* self) {
+    return self ? static_cast<int>(self->GetRowCount()) : 0;
+}
+
+std::string wx_radio_box_get_item_help_text(wxRadioBox* self, int n) {
+    if (!self || n < 0 || static_cast<unsigned>(n) >= self->GetCount()) return "";
+    return std::string(self->GetItemHelpText(static_cast<unsigned>(n)).utf8_str());
+}
+
+void wx_radio_box_set_item_help_text(wxRadioBox* self, int n, const std::string& s) {
+    if (!self || n < 0 || static_cast<unsigned>(n) >= self->GetCount()) return;
+    self->SetItemHelpText(static_cast<unsigned>(n), wxString::FromUTF8(s.c_str()));
+}
+
+int wx_radio_box_get_item_from_point(wxRadioBox* self, const wx_point& pt) {
+    return self ? self->GetItemFromPoint(pt) : wxNOT_FOUND;
+}
+
+int wx_radio_box_get_next_item(wxRadioBox* self, int item, int direction, int style) {
+    if (!self) return wxNOT_FOUND;
+    return self->GetNextItem(item, static_cast<wxDirection>(direction), static_cast<long>(style));
+}

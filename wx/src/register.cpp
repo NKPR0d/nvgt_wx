@@ -610,6 +610,57 @@ void register_value_types(asIScriptEngine* engine) {
     engine->RegisterObjectMethod(name, "bool auto_complete_directories()", asFUNCTION(wx_text_entry_auto_complete_directories), asCALL_CDECL_OBJFIRST);
 
 // ---------------------------------------------------------------------------
+// REG_ITEM_CONTAINER_METHODS — wxItemContainer mix-in surface, applied to
+// wx_item_container itself and to every concrete control that derives from
+// wxItemContainer. Same trick as REG_TEXT_ENTRY_METHODS: every wrapper takes
+// a wxWindow* and dynamic_casts to wxItemContainer / wxItemContainerImmutable
+// internally — see helpers.cpp/GetItemContainer{,Immutable}.
+//
+// wxComboBox is awkward: it derives from BOTH wxItemContainer and wxTextEntry,
+// and three method names collide between the two mix-ins (`clear`, `is_empty`,
+// `get_string_selection`). The macro is therefore split in two: the *_BASE_*
+// macro contains everything that does NOT collide, and the *_FULL_* macro
+// adds the colliding three with their wxItemContainer semantics. Concrete
+// types that are NOT also wxTextEntry (wx_choice, wx_list_box, the
+// wx_item_container handle itself) get the FULL macro. wx_combo_box only
+// gets BASE — for the colliding names the wxTextEntry semantics win, and
+// the item-side variants are exposed under the disambiguated names
+// `is_list_empty` / `clear_items` / `get_item_string_selection` that
+// wxComboBoxBase itself documents in <wx/combobox.h>.
+//
+// wxRadioBox derives only from wxItemContainerImmutable (its set of buttons
+// is fixed at construction) and is registered separately with its own
+// duplicated read-only surface — the dynamic_cast in GetItemContainer
+// would return nullptr for it.
+// ---------------------------------------------------------------------------
+#define REG_ITEM_CONTAINER_BASE_METHODS(name) \
+    /* wxItemContainerImmutable read-only surface (non-conflicting). */ \
+    engine->RegisterObjectMethod(name, "int get_count() const property", asFUNCTION(wx_item_container_get_count), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "string get_string(int n) const", asFUNCTION(wx_item_container_get_string), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_string(int n, const string &in s)", asFUNCTION(wx_item_container_set_string), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int find_string(const string &in s, bool case_sensitive = false) const", asFUNCTION(wx_item_container_find_string), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int get_selection() const property", asFUNCTION(wx_item_container_get_selection), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_selection(int n) property", asFUNCTION(wx_item_container_set_selection), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void select(int n)", asFUNCTION(wx_item_container_set_selection), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool set_string_selection(const string &in s)", asFUNCTION(wx_item_container_set_string_selection), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "array<string>@ get_strings() const", asFUNCTION(wx_item_container_get_strings), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool is_sorted() const", asFUNCTION(wx_item_container_is_sorted), asCALL_CDECL_OBJFIRST); \
+    /* wxItemContainer mutator surface (non-conflicting). */ \
+    engine->RegisterObjectMethod(name, "int append(const string &in s)", asFUNCTION(wx_item_container_append), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int append(array<string>@ items)", asFUNCTION(wx_item_container_append_many), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int insert(const string &in s, int pos)", asFUNCTION(wx_item_container_insert), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int insert(array<string>@ items, int pos)", asFUNCTION(wx_item_container_insert_many), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set(array<string>@ items)", asFUNCTION(wx_item_container_set), asCALL_CDECL_OBJFIRST); \
+    /* wxItemContainer::Delete is exposed as `delete_item` because `delete` is a reserved AS keyword. */ \
+    engine->RegisterObjectMethod(name, "void delete_item(int n)", asFUNCTION(wx_item_container_delete), asCALL_CDECL_OBJFIRST);
+
+#define REG_ITEM_CONTAINER_FULL_METHODS(name) \
+    REG_ITEM_CONTAINER_BASE_METHODS(name); \
+    engine->RegisterObjectMethod(name, "bool is_empty() const", asFUNCTION(wx_item_container_is_empty), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "string get_string_selection() const property", asFUNCTION(wx_item_container_get_string_selection), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void clear()", asFUNCTION(wx_item_container_clear), asCALL_CDECL_OBJFIRST);
+
+// ---------------------------------------------------------------------------
 // REGISTER_WX_* — register a concrete wx ref type, install AddRef/Release,
 // install the wx_window/wx_control/... implicit-cast operators, and bring
 // in the methods inherited from the relevant base class.
@@ -872,6 +923,13 @@ void register_all_types(asIScriptEngine* engine) {
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_TEXT_URL", wxEVT_TEXT_URL);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_TEXT_MAXLEN", wxEVT_TEXT_MAXLEN);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_RADIOBUTTON", wxEVT_RADIOBUTTON);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_CHOICE", wxEVT_CHOICE);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_LISTBOX", wxEVT_LISTBOX);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_LISTBOX_DCLICK", wxEVT_LISTBOX_DCLICK);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_RADIOBOX", wxEVT_RADIOBOX);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_COMBOBOX", wxEVT_COMBOBOX);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_COMBOBOX_DROPDOWN", wxEVT_COMBOBOX_DROPDOWN);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_COMBOBOX_CLOSEUP", wxEVT_COMBOBOX_CLOSEUP);
 
     // Per-control style enums. The previous wx_style umbrella mixed
     // bitmasks that overlap across control families (e.g. WX_TE_LEFT
@@ -947,6 +1005,56 @@ void register_all_types(asIScriptEngine* engine) {
     engine->RegisterEnum("wx_radio_button_style");
     engine->RegisterEnumValue("wx_radio_button_style", "WX_RB_GROUP", wxRB_GROUP);
     engine->RegisterEnumValue("wx_radio_button_style", "WX_RB_SINGLE", wxRB_SINGLE);
+
+    // Per-control style enums for the four selector controls. Each
+    // is its own enum (not a shared one) because the bitmasks overlap
+    // across control families — e.g. wxLB_SORT and wxCB_SORT share
+    // bits with each other but mean different things in different
+    // controls. AngelScript still implicitly converts these to int at
+    // call sites, so OR-combining a window style with a control style
+    // (e.g. WX_VSCROLL | WX_LB_SORT) keeps working at the int level.
+    engine->RegisterEnum("wx_choice_style");
+    // wxChoice's only documented bit-flag is wxCB_SORT; everything
+    // else comes from wx_window_style. Register the enum even when
+    // it has just one member so the symbol exists for scripts that
+    // want to be explicit about the namespace.
+    engine->RegisterEnumValue("wx_choice_style", "WX_CB_SORT", wxCB_SORT);
+
+    engine->RegisterEnum("wx_combo_box_style");
+    engine->RegisterEnumValue("wx_combo_box_style", "WX_CB_SIMPLE", wxCB_SIMPLE);
+    engine->RegisterEnumValue("wx_combo_box_style", "WX_CB_DROPDOWN", wxCB_DROPDOWN);
+    engine->RegisterEnumValue("wx_combo_box_style", "WX_CB_READONLY", wxCB_READONLY);
+    engine->RegisterEnumValue("wx_combo_box_style", "WX_CB_SORT", wxCB_SORT);
+    // wxComboBox forwards wxTE_PROCESS_ENTER / wxTE_PROCESS_TAB to its
+    // text-entry side; mirror the constants here so scripts don't have
+    // to reach into wx_text_ctrl_style for combobox-specific styling.
+    engine->RegisterEnumValue("wx_combo_box_style", "WX_TE_PROCESS_ENTER", wxTE_PROCESS_ENTER);
+    engine->RegisterEnumValue("wx_combo_box_style", "WX_TE_PROCESS_TAB", wxTE_PROCESS_TAB);
+
+    engine->RegisterEnum("wx_list_box_style");
+    engine->RegisterEnumValue("wx_list_box_style", "WX_LB_SINGLE", wxLB_SINGLE);
+    engine->RegisterEnumValue("wx_list_box_style", "WX_LB_MULTIPLE", wxLB_MULTIPLE);
+    engine->RegisterEnumValue("wx_list_box_style", "WX_LB_EXTENDED", wxLB_EXTENDED);
+    engine->RegisterEnumValue("wx_list_box_style", "WX_LB_HSCROLL", wxLB_HSCROLL);
+    engine->RegisterEnumValue("wx_list_box_style", "WX_LB_ALWAYS_SB", wxLB_ALWAYS_SB);
+    engine->RegisterEnumValue("wx_list_box_style", "WX_LB_NEEDED_SB", wxLB_NEEDED_SB);
+    engine->RegisterEnumValue("wx_list_box_style", "WX_LB_NO_SB", wxLB_NO_SB);
+    engine->RegisterEnumValue("wx_list_box_style", "WX_LB_SORT", wxLB_SORT);
+    engine->RegisterEnumValue("wx_list_box_style", "WX_LB_INT_HEIGHT", wxLB_INT_HEIGHT);
+
+    engine->RegisterEnum("wx_radio_box_style");
+    // wxRadioBox derives its layout direction from one of two
+    // mutually-exclusive style bits. The header defines wxRA_HORIZONTAL
+    // and wxRA_VERTICAL as plain aliases for wxHORIZONTAL/wxVERTICAL,
+    // and wxRA_SPECIFY_COLS/wxRA_SPECIFY_ROWS as the same numeric
+    // values; registering them under their wxRA_ names keeps the
+    // wxWidgets documentation cross-referenceable from script code.
+    engine->RegisterEnumValue("wx_radio_box_style", "WX_RA_SPECIFY_ROWS", wxRA_SPECIFY_ROWS);
+    engine->RegisterEnumValue("wx_radio_box_style", "WX_RA_SPECIFY_COLS", wxRA_SPECIFY_COLS);
+    engine->RegisterEnumValue("wx_radio_box_style", "WX_RA_HORIZONTAL", wxRA_HORIZONTAL);
+    engine->RegisterEnumValue("wx_radio_box_style", "WX_RA_VERTICAL", wxRA_VERTICAL);
+    engine->RegisterEnumValue("wx_radio_box_style", "WX_RA_LEFTTORIGHT", wxRA_LEFTTORIGHT);
+    engine->RegisterEnumValue("wx_radio_box_style", "WX_RA_TOPTOBOTTOM", wxRA_TOPTOBOTTOM);
 
     // wxFlexGridSizer.SetFlexibleDirection accepts a wxOrientation value
     // (wxHORIZONTAL/wxVERTICAL/wxBOTH), which already exists as wx_orientation
@@ -1029,6 +1137,11 @@ void register_all_types(asIScriptEngine* engine) {
     engine->RegisterObjectType("wx_top_level_window", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_control", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_text_entry", 0, asOBJ_REF);
+    // wx_item_container is the AS-side mix-in handle for wxItemContainer.
+    // It is forward-declared here (alongside wx_text_entry) so the
+    // opImplCast registrations on the concrete selectors below can name
+    // it as a return type before it has a body.
+    engine->RegisterObjectType("wx_item_container", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_sizer", 0, asOBJ_REF);
     engine->RegisterObjectType("wx_sizer_item", 0, asOBJ_REF);
     REG_BASE_REF("wx_sizer_item");
@@ -1044,6 +1157,8 @@ void register_all_types(asIScriptEngine* engine) {
     REGISTER_WX_CONTROL("wx_control", wxControl);
     REG_BASE_REF("wx_text_entry");
     REG_TEXT_ENTRY_METHODS("wx_text_entry");
+    REG_BASE_REF("wx_item_container");
+    REG_ITEM_CONTAINER_FULL_METHODS("wx_item_container");
     REGISTER_WX_SIZER("wx_sizer", wxSizer);
     REGISTER_WX_SIZER("wx_box_sizer", wxBoxSizer);
     REG_BOX_SIZER_METHODS("wx_box_sizer");
@@ -1109,6 +1224,99 @@ void register_all_types(asIScriptEngine* engine) {
     engine->RegisterObjectMethod("wx_radio_button", "wx_radio_button@ get_last_in_group()", asFUNCTION(wx_radio_button_get_last_in_group), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_radio_button", "wx_radio_button@ get_next_in_group()", asFUNCTION(wx_radio_button_get_next_in_group), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_radio_button", "wx_radio_button@ get_previous_in_group()", asFUNCTION(wx_radio_button_get_previous_in_group), asCALL_CDECL_OBJFIRST);
+
+    // ---- Selectors --------------------------------------------------------
+    //
+    // wxChoice / wxComboBox / wxListBox each derive from both wxControl and
+    // wxItemContainer. The wxControl side is registered through
+    // REGISTER_WX_CONTROL; the wxItemContainer side is registered as an
+    // opImplCast to wx_item_container plus a duplicated REG_ITEM_CONTAINER_METHODS
+    // application on the concrete type — AS asOBJ_REF types do not transitively
+    // inherit methods, so the methods need to live on the concrete type too
+    // (otherwise scripts would have to manually cast to wx_item_container@
+    // before every append/insert call). wxComboBox additionally derives from
+    // wxTextEntry, so it gets the wx_text_entry cast and REG_TEXT_ENTRY_METHODS
+    // as well. wxRadioBox is the odd one out — see below.
+
+    REGISTER_WX_CONTROL("wx_choice", wxChoice);
+    engine->RegisterObjectMethod("wx_choice", "wx_item_container@ opImplCast()", asFUNCTION(to_item_container_as_win<wxChoice>), asCALL_CDECL_OBJFIRST);
+    REG_ITEM_CONTAINER_FULL_METHODS("wx_choice");
+    engine->RegisterObjectMethod("wx_choice", "int get_current_selection() const", asFUNCTION(wx_choice_get_current_selection), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_choice", "int get_columns() const property", asFUNCTION(wx_choice_get_columns), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_choice", "void set_columns(int n) property", asFUNCTION(wx_choice_set_columns), asCALL_CDECL_OBJFIRST);
+
+    REGISTER_WX_CONTROL("wx_combo_box", wxComboBox);
+    engine->RegisterObjectMethod("wx_combo_box", "wx_item_container@ opImplCast()", asFUNCTION(to_item_container_as_win<wxComboBox>), asCALL_CDECL_OBJFIRST);
+    // BASE only — see comment on REG_ITEM_CONTAINER_BASE_METHODS. The
+    // colliding three names default to the wxTextEntry semantics; the
+    // item-list semantics live under the disambiguated names below.
+    REG_ITEM_CONTAINER_BASE_METHODS("wx_combo_box");
+    engine->RegisterObjectMethod("wx_combo_box", "wx_text_entry@ opImplCast()", asFUNCTION(to_text_entry_as_win<wxComboBox>), asCALL_CDECL_OBJFIRST);
+    REG_TEXT_ENTRY_METHODS("wx_combo_box");
+    // Items-side variants of the conflicting names. wxComboBoxBase exposes
+    // IsListEmpty/IsTextEmpty for exactly this disambiguation; the bridge
+    // mirrors that with `is_list_empty`. `clear_items` calls the item-
+    // container Clear so callers can wipe the list without also clearing
+    // the text-entry value (combo_box.clear() in wx clears both —
+    // wxComboBox::Clear() override). `get_item_string_selection` returns
+    // the label of the currently-selected item, which on wxComboBox can
+    // differ from the text-entry value (the user may have typed something
+    // not in the list).
+    engine->RegisterObjectMethod("wx_combo_box", "bool is_list_empty() const", asFUNCTION(wx_item_container_is_empty), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_combo_box", "void clear_items()", asFUNCTION(wx_item_container_clear), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_combo_box", "string get_item_string_selection() const", asFUNCTION(wx_item_container_get_string_selection), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_combo_box", "int get_current_selection() const", asFUNCTION(wx_combo_box_get_current_selection), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_combo_box", "void popup()", asFUNCTION(wx_combo_box_popup), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_combo_box", "void dismiss()", asFUNCTION(wx_combo_box_dismiss), asCALL_CDECL_OBJFIRST);
+
+    REGISTER_WX_CONTROL("wx_list_box", wxListBox);
+    engine->RegisterObjectMethod("wx_list_box", "wx_item_container@ opImplCast()", asFUNCTION(to_item_container_as_win<wxListBox>), asCALL_CDECL_OBJFIRST);
+    REG_ITEM_CONTAINER_FULL_METHODS("wx_list_box");
+    engine->RegisterObjectMethod("wx_list_box", "bool is_selected(int n) const", asFUNCTION(wx_list_box_is_selected), asCALL_CDECL_OBJFIRST);
+    // wxListBox::SetSelection has a (int, bool) overload for multi-selection
+    // listboxes that conflicts with wxItemContainer::SetSelection(int) on
+    // the AS side (same name, both registered); expose it under a distinct
+    // name to keep both reachable.
+    engine->RegisterObjectMethod("wx_list_box", "void set_selection_multi(int n, bool select)", asFUNCTION(wx_list_box_set_selection_multi), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_list_box", "void deselect(int n)", asFUNCTION(wx_list_box_deselect), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_list_box", "void deselect_all(int leave = -1)", asFUNCTION(wx_list_box_deselect_all), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_list_box", "array<int>@ get_selections() const", asFUNCTION(wx_list_box_get_selections), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_list_box", "void set_first_item(int n)", asFUNCTION(wx_list_box_set_first_item), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_list_box", "void set_first_item(const string &in s)", asFUNCTION(wx_list_box_set_first_item_string), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_list_box", "void ensure_visible(int n)", asFUNCTION(wx_list_box_ensure_visible), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_list_box", "int get_top_item() const property", asFUNCTION(wx_list_box_get_top_item), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_list_box", "int get_count_per_page() const property", asFUNCTION(wx_list_box_get_count_per_page), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_list_box", "void append_and_ensure_visible(const string &in s)", asFUNCTION(wx_list_box_append_and_ensure_visible), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_list_box", "bool has_multiple_selection() const", asFUNCTION(wx_list_box_has_multiple_selection), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_list_box", "int hit_test(const wx_point &in pt) const", asFUNCTION(wx_list_box_hit_test), asCALL_CDECL_OBJFIRST);
+
+    // wxRadioBox derives from wxItemContainerImmutable, **not**
+    // wxItemContainer. Append/Insert/Clear/Delete/Set are not available, so
+    // wx_radio_box does not get the wx_item_container cast or the macro.
+    // The read-only half of the wxItemContainer surface is duplicated
+    // here through the wx_radio_box_* free functions, plus the radiobox-
+    // specific per-item enable/show/help-text accessors and the
+    // GetNextItem navigation helper.
+    REGISTER_WX_CONTROL("wx_radio_box", wxRadioBox);
+    engine->RegisterObjectMethod("wx_radio_box", "int get_count() const property", asFUNCTION(wx_radio_box_get_count), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "bool is_empty() const", asFUNCTION(wx_radio_box_is_empty), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "string get_string(int n) const", asFUNCTION(wx_radio_box_get_string), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "void set_string(int n, const string &in s)", asFUNCTION(wx_radio_box_set_string), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "int find_string(const string &in s, bool case_sensitive = false) const", asFUNCTION(wx_radio_box_find_string), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "int get_selection() const property", asFUNCTION(wx_radio_box_get_selection), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "void set_selection(int n) property", asFUNCTION(wx_radio_box_set_selection), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "string get_string_selection() const property", asFUNCTION(wx_radio_box_get_string_selection), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "bool set_string_selection(const string &in s)", asFUNCTION(wx_radio_box_set_string_selection), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "bool enable_item(int n, bool enable = true)", asFUNCTION(wx_radio_box_enable_item), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "bool show_item(int n, bool show = true)", asFUNCTION(wx_radio_box_show_item), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "bool is_item_enabled(int n) const", asFUNCTION(wx_radio_box_is_item_enabled), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "bool is_item_shown(int n) const", asFUNCTION(wx_radio_box_is_item_shown), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "int get_column_count() const property", asFUNCTION(wx_radio_box_get_column_count), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "int get_row_count() const property", asFUNCTION(wx_radio_box_get_row_count), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "string get_item_help_text(int n) const", asFUNCTION(wx_radio_box_get_item_help_text), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "void set_item_help_text(int n, const string &in s)", asFUNCTION(wx_radio_box_set_item_help_text), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "int get_item_from_point(const wx_point &in pt) const", asFUNCTION(wx_radio_box_get_item_from_point), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "int get_next_item(int item, wx_direction direction, int style) const", asFUNCTION(wx_radio_box_get_next_item), asCALL_CDECL_OBJFIRST);
 
     engine->RegisterObjectMethod("wx_event", "wx_key_event@ opCast()", asFUNCTION(event_to_derived<wxKeyEvent>), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectMethod("wx_event", "wx_mouse_event@ opCast()", asFUNCTION(event_to_derived<wxMouseEvent>), asCALL_CDECL_OBJLAST);

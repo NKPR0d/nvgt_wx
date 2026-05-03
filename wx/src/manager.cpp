@@ -183,6 +183,67 @@ public:
         wxString wx_s = wxString::FromUTF8(label.c_str());
         return Track(new wxRadioButton(parent, wxID_ANY, wx_s, wxDefaultPosition, wxDefaultSize, style, wxDefaultValidator, wx_s));
     }
+
+    // ---- Selectors -------------------------------------------------------
+    //
+    // wxChoice / wxComboBox / wxListBox each accept an initial item set
+    // through a wxArrayString ctor parameter. The factories below take an
+    // optional `string[]@` from the script side, convert it through
+    // as_array_to_wx_strings (helpers.cpp), and forward it to the wx ctor;
+    // a null array becomes an empty wxArrayString, matching the wx default.
+    //
+    // wxRadioBox is different: its set of buttons is fixed at construction
+    // (see wxItemContainerImmutable note in helpers.cpp), so the items
+    // parameter is required.
+
+    wxChoice* create_choice(wxWindow* parent,
+                            CScriptArray* items = nullptr,
+                            long style = 0) {
+        wxArrayString choices = as_array_to_wx_strings(items);
+        return Track(new wxChoice(parent, wxID_ANY, wxDefaultPosition,
+                                  wxDefaultSize, choices, style));
+    }
+
+    wxComboBox* create_combo_box(wxWindow* parent,
+                                 const std::string& value = "",
+                                 CScriptArray* items = nullptr,
+                                 long style = 0) {
+        wxArrayString choices = as_array_to_wx_strings(items);
+        return Track(new wxComboBox(parent, wxID_ANY,
+                                    wxString::FromUTF8(value.c_str()),
+                                    wxDefaultPosition, wxDefaultSize,
+                                    choices, style));
+    }
+
+    wxListBox* create_list_box(wxWindow* parent,
+                               CScriptArray* items = nullptr,
+                               long style = 0) {
+        wxArrayString choices = as_array_to_wx_strings(items);
+        return Track(new wxListBox(parent, wxID_ANY, wxDefaultPosition,
+                                   wxDefaultSize, choices, style));
+    }
+
+    // wxRadioBox's `majorDim` parameter is the number of rows or columns
+    // (depending on style). 0 means "as many as needed for one row /
+    // column" — that matches the wx documented default and is the most
+    // common choice for short option lists.
+    wxRadioBox* create_radio_box(wxWindow* parent,
+                                 const std::string& title,
+                                 CScriptArray* items,
+                                 int major_dim = 0,
+                                 long style = wxRA_SPECIFY_COLS) {
+        wxArrayString choices = as_array_to_wx_strings(items);
+        if (choices.IsEmpty()) {
+            // wxRadioBox asserts on an empty item list in debug and is
+            // visually meaningless in release. Refuse rather than letting
+            // the assert / undefined layout reach the user.
+            return nullptr;
+        }
+        return Track(new wxRadioBox(parent, wxID_ANY,
+                                    wxString::FromUTF8(title.c_str()),
+                                    wxDefaultPosition, wxDefaultSize,
+                                    choices, major_dim, style));
+    }
 };
 
 void WxConstructor(WxManager* self) { new(self) WxManager(); }
@@ -211,4 +272,24 @@ void register_wx_manager(asIScriptEngine* engine) {
     engine->RegisterObjectMethod("wx", "wx_static_text@ create_static_text(wx_window@, const string &in label, int style = 0)", asMETHOD(WxManager, create_static_text), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_text_control@ create_text_control(wx_window@, const string &in text = \"\", int style = 0)", asMETHOD(WxManager, create_text_control), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx", "wx_radio_button@ create_radio_button(wx_window@, const string &in label, int style = 0)", asMETHOD(WxManager, create_radio_button), asCALL_THISCALL);
+    // Selector factories take string[]@ items via the scriptarray addon.
+    // The default-null-handle form lets scripts skip the items argument
+    // and populate the control with append/insert later (wx_choice and
+    // wx_list_box ship empty by default; wx_combo_box also accepts an
+    // initial text value). wx_radio_box requires a non-empty item list
+    // because wxRadioBox does not allow mutation after construction —
+    // that is enforced inside create_radio_box rather than in the AS
+    // signature so the factory can null-return on the empty case.
+    engine->RegisterObjectMethod("wx",
+        "wx_choice@ create_choice(wx_window@, array<string>@ items = null, int style = 0)",
+        asMETHOD(WxManager, create_choice), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx",
+        "wx_combo_box@ create_combo_box(wx_window@, const string &in value = \"\", array<string>@ items = null, int style = 0)",
+        asMETHOD(WxManager, create_combo_box), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx",
+        "wx_list_box@ create_list_box(wx_window@, array<string>@ items = null, int style = 0)",
+        asMETHOD(WxManager, create_list_box), asCALL_THISCALL);
+    engine->RegisterObjectMethod("wx",
+        "wx_radio_box@ create_radio_box(wx_window@, const string &in title, array<string>@ items, int major_dim = 0, int style = WX_RA_SPECIFY_COLS)",
+        asMETHOD(WxManager, create_radio_box), asCALL_THISCALL);
 }
