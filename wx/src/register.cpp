@@ -383,7 +383,14 @@ void register_value_types(asIScriptEngine* engine) {
     engine->RegisterObjectMethod(name, "void get_selection(int &out from, int &out to) const", asFUNCTION(wx_text_entry_get_selection), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_selection(int from, int to)", asFUNCTION(wx_text_entry_set_selection), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool has_selection() const", asFUNCTION(wx_text_entry_has_selection), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "bool is_editable() const property", asFUNCTION(wx_text_entry_is_editable), asCALL_CDECL_OBJFIRST); \
+    /* `is_editable` cannot carry the `property` keyword: AngelScript only \
+       recognises `get_` and `set_` as property-accessor prefixes (it does \
+       NOT understand `is_`/`has_`/`can_`). The getter is registered as \
+       `get_editable` so it pairs with `set_editable`, and `is_editable` \
+       is also exposed as a plain method for callers who prefer the wx \
+       spelling — both routes call wx_text_entry_is_editable. */ \
+    engine->RegisterObjectMethod(name, "bool get_editable() const property", asFUNCTION(wx_text_entry_is_editable), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool is_editable() const", asFUNCTION(wx_text_entry_is_editable), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_editable(bool editable) property", asFUNCTION(wx_text_entry_set_editable), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool is_empty() const", asFUNCTION(wx_text_entry_is_empty), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void replace(int from, int to, const string &in text)", asFUNCTION(wx_text_entry_replace), asCALL_CDECL_OBJFIRST); \
