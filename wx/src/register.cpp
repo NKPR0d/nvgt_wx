@@ -63,6 +63,52 @@ wx_colour& wx_colour_op_assign(wx_colour* self, const wx_colour& other) {
 }
 
 // ---------------------------------------------------------------------------
+// wx_gb_position / wx_gb_span: AS-side mirrors of wxGBPosition / wxGBSpan
+// (see common.h). Both are plain POD structs of two ints. Default construct
+// to (0, 0) for position and (1, 1) for span — wxGBSpan asserts that both
+// dimensions are >= 1, and wxDefaultSpan in wxWidgets is constructed as
+// (1, 1). The 1-arg row-only ctor variants are exposed too because the
+// most common script idiom is `wx_gb_position(row, col)`.
+// ---------------------------------------------------------------------------
+void wx_gb_position_default_ctor(void* mem) {
+    auto* p = static_cast<wx_gb_position*>(mem);
+    p->row = 0; p->col = 0;
+}
+void wx_gb_position_rc_ctor(int row, int col, void* mem) {
+    auto* p = static_cast<wx_gb_position*>(mem);
+    p->row = row; p->col = col;
+}
+void wx_gb_position_copy_ctor(const wx_gb_position& other, void* mem) {
+    new (mem) wx_gb_position(other);
+}
+void wx_gb_position_dtor(void* mem) {
+    static_cast<wx_gb_position*>(mem)->~wx_gb_position();
+}
+wx_gb_position& wx_gb_position_op_assign(wx_gb_position* self, const wx_gb_position& other) {
+    *self = other;
+    return *self;
+}
+
+void wx_gb_span_default_ctor(void* mem) {
+    auto* p = static_cast<wx_gb_span*>(mem);
+    p->rowspan = 1; p->colspan = 1;
+}
+void wx_gb_span_rc_ctor(int rowspan, int colspan, void* mem) {
+    auto* p = static_cast<wx_gb_span*>(mem);
+    p->rowspan = rowspan; p->colspan = colspan;
+}
+void wx_gb_span_copy_ctor(const wx_gb_span& other, void* mem) {
+    new (mem) wx_gb_span(other);
+}
+void wx_gb_span_dtor(void* mem) {
+    static_cast<wx_gb_span*>(mem)->~wx_gb_span();
+}
+wx_gb_span& wx_gb_span_op_assign(wx_gb_span* self, const wx_gb_span& other) {
+    *self = other;
+    return *self;
+}
+
+// ---------------------------------------------------------------------------
 // wxFont value-type adapters. wxFont is internally reference-counted, so
 // copy/destruct are cheap pointer operations and value-type semantics are
 // the right fit. The full ctor accepts `int` for family/style/weight so
@@ -191,6 +237,40 @@ void register_value_types(asIScriptEngine* engine) {
     engine->RegisterObjectProperty("wx_colour", "uint8 g", offsetof(wx_colour, g));
     engine->RegisterObjectProperty("wx_colour", "uint8 b", offsetof(wx_colour, b));
     engine->RegisterObjectProperty("wx_colour", "uint8 a", offsetof(wx_colour, a));
+
+    // wx_gb_position / wx_gb_span: POD pair-of-int value types backing
+    // wxGBPosition / wxGBSpan. Same flag set as wx_colour: POD + ALLINTS
+    // tells AS that the type is bit-copyable and consists of integral
+    // members for SystemV ABI passing.
+    engine->RegisterObjectType("wx_gb_position", sizeof(wx_gb_position),
+        asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<wx_gb_position>() | asOBJ_APP_CLASS_ALLINTS);
+    engine->RegisterObjectBehaviour("wx_gb_position", asBEHAVE_CONSTRUCT, "void f()",
+        asFUNCTION(wx_gb_position_default_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_gb_position", asBEHAVE_CONSTRUCT, "void f(int row, int col)",
+        asFUNCTION(wx_gb_position_rc_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_gb_position", asBEHAVE_CONSTRUCT, "void f(const wx_gb_position &in)",
+        asFUNCTION(wx_gb_position_copy_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_gb_position", asBEHAVE_DESTRUCT, "void f()",
+        asFUNCTION(wx_gb_position_dtor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectMethod("wx_gb_position", "wx_gb_position &opAssign(const wx_gb_position &in)",
+        asFUNCTION(wx_gb_position_op_assign), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectProperty("wx_gb_position", "int row", offsetof(wx_gb_position, row));
+    engine->RegisterObjectProperty("wx_gb_position", "int col", offsetof(wx_gb_position, col));
+
+    engine->RegisterObjectType("wx_gb_span", sizeof(wx_gb_span),
+        asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<wx_gb_span>() | asOBJ_APP_CLASS_ALLINTS);
+    engine->RegisterObjectBehaviour("wx_gb_span", asBEHAVE_CONSTRUCT, "void f()",
+        asFUNCTION(wx_gb_span_default_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_gb_span", asBEHAVE_CONSTRUCT, "void f(int rowspan, int colspan)",
+        asFUNCTION(wx_gb_span_rc_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_gb_span", asBEHAVE_CONSTRUCT, "void f(const wx_gb_span &in)",
+        asFUNCTION(wx_gb_span_copy_ctor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectBehaviour("wx_gb_span", asBEHAVE_DESTRUCT, "void f()",
+        asFUNCTION(wx_gb_span_dtor), asCALL_CDECL_OBJLAST);
+    engine->RegisterObjectMethod("wx_gb_span", "wx_gb_span &opAssign(const wx_gb_span &in)",
+        asFUNCTION(wx_gb_span_op_assign), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectProperty("wx_gb_span", "int rowspan", offsetof(wx_gb_span, rowspan));
+    engine->RegisterObjectProperty("wx_gb_span", "int colspan", offsetof(wx_gb_span, colspan));
 
     // wx_font: value-type wrapper around wxFont. wxFont's payload is a
     // wxGDIObject pointer (reference-counted internally), so copies and
@@ -572,6 +652,104 @@ void register_value_types(asIScriptEngine* engine) {
     } \
     REG_SIZER_METHODS(as_name);
 
+// ---------------------------------------------------------------------------
+// REG_BOX_SIZER_METHODS — applied on wxBoxSizer and every concrete sizer
+// that inherits from it (wx_box_sizer, wx_wrap_sizer, wx_static_box_sizer).
+// AngelScript has no transitive method inheritance for asOBJ_REF types, so
+// these are duplicated on every leaf type that should expose them.
+// ---------------------------------------------------------------------------
+#define REG_BOX_SIZER_METHODS(name) \
+    engine->RegisterObjectMethod(name, "int get_orientation() const property", asMETHOD(wxBoxSizer, GetOrientation), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void set_orientation(int orient) property", asMETHOD(wxBoxSizer, SetOrientation), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool is_vertical() const", asMETHOD(wxBoxSizer, IsVertical), asCALL_THISCALL);
+
+// ---------------------------------------------------------------------------
+// REG_GRID_SIZER_METHODS — applied on every wxGridSizer-derived bridge
+// type (wx_grid_sizer, wx_flex_grid_sizer, wx_grid_bag_sizer). The
+// effective-count getters go through wrappers because they are inline
+// in the wx headers and asMETHOD on inline-only members can fail to
+// resolve under MSVC's whole-program optimisation; the wrappers force
+// an out-of-line definition the linker can grab.
+// ---------------------------------------------------------------------------
+#define REG_GRID_SIZER_METHODS(name) \
+    engine->RegisterObjectMethod(name, "int get_cols() const property", asMETHOD(wxGridSizer, GetCols), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void set_cols(int cols) property", asMETHOD(wxGridSizer, SetCols), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "int get_rows() const property", asMETHOD(wxGridSizer, GetRows), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void set_rows(int rows) property", asMETHOD(wxGridSizer, SetRows), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "int get_vgap() const property", asMETHOD(wxGridSizer, GetVGap), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void set_vgap(int gap) property", asMETHOD(wxGridSizer, SetVGap), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "int get_hgap() const property", asMETHOD(wxGridSizer, GetHGap), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void set_hgap(int gap) property", asMETHOD(wxGridSizer, SetHGap), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "int get_effective_cols_count() const property", asFUNCTION(wx_grid_sizer_get_effective_cols_count), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int get_effective_rows_count() const property", asFUNCTION(wx_grid_sizer_get_effective_rows_count), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void calc_rows_cols(int &out rows, int &out cols)", asFUNCTION(wx_grid_sizer_calc_rows_cols), asCALL_CDECL_OBJFIRST);
+
+// ---------------------------------------------------------------------------
+// REG_FLEX_GRID_SIZER_METHODS — applied on wx_flex_grid_sizer and
+// wx_grid_bag_sizer. AddGrowable*/IsRowGrowable take size_t in the wx
+// API; wrappers cast int->size_t and clamp negative inputs to 0 to keep
+// the AS-side surface ints-only. The non-flexible-grow-mode is bound
+// through wrappers because the wx getter/setter take a strongly-typed
+// wxFlexSizerGrowMode enum, and asMETHOD on enum-typed methods would
+// require AS to know the enum's exact identity at the binding site.
+// ---------------------------------------------------------------------------
+#define REG_FLEX_GRID_SIZER_METHODS(name) \
+    engine->RegisterObjectMethod(name, "void add_growable_row(int idx, int proportion = 0)", asFUNCTION(wx_flex_grid_sizer_add_growable_row), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void remove_growable_row(int idx)", asFUNCTION(wx_flex_grid_sizer_remove_growable_row), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void add_growable_col(int idx, int proportion = 0)", asFUNCTION(wx_flex_grid_sizer_add_growable_col), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void remove_growable_col(int idx)", asFUNCTION(wx_flex_grid_sizer_remove_growable_col), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool is_row_growable(int idx)", asFUNCTION(wx_flex_grid_sizer_is_row_growable), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool is_col_growable(int idx)", asFUNCTION(wx_flex_grid_sizer_is_col_growable), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "int get_flexible_direction() const property", asMETHOD(wxFlexGridSizer, GetFlexibleDirection), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void set_flexible_direction(int direction) property", asMETHOD(wxFlexGridSizer, SetFlexibleDirection), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "int get_non_flexible_grow_mode() const property", asFUNCTION(wx_flex_grid_sizer_get_non_flexible_grow_mode), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_non_flexible_grow_mode(int mode) property", asFUNCTION(wx_flex_grid_sizer_set_non_flexible_grow_mode), asCALL_CDECL_OBJFIRST);
+
+// ---------------------------------------------------------------------------
+// REG_GRID_BAG_SIZER_METHODS — wxGridBagSizer-only API. The pos/span
+// `add` overloads are extra to the inherited (proportion, flag, border)
+// `add` from REG_SIZER_METHODS; they coexist via AngelScript overload
+// resolution, but scripts MUST use the pos/span form on grid_bag — the
+// proportion-based `add` will assert inside wxWidgets because
+// wxGridBagSizer's DoInsert demands a wxGBSizerItem and proportion-based
+// inserts construct a plain wxSizerItem. This is documented in
+// AGENTS.md.
+// ---------------------------------------------------------------------------
+#define REG_GRID_BAG_SIZER_METHODS(name) \
+    engine->RegisterObjectMethod(name, "void add(wx_window@, const wx_gb_position &in pos, const wx_gb_span &in span = wx_gb_span(1, 1), int flag = 0, int border = 0)", asFUNCTION(wx_grid_bag_sizer_add_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void add(wx_sizer@, const wx_gb_position &in pos, const wx_gb_span &in span = wx_gb_span(1, 1), int flag = 0, int border = 0)", asFUNCTION(wx_grid_bag_sizer_add_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void add_spacer(int width, int height, const wx_gb_position &in pos, const wx_gb_span &in span = wx_gb_span(1, 1), int flag = 0, int border = 0)", asFUNCTION(wx_grid_bag_sizer_add_spacer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_size get_empty_cell_size() const property", asFUNCTION(wx_grid_bag_sizer_get_empty_cell_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void set_empty_cell_size(const wx_size &in size) property", asFUNCTION(wx_grid_bag_sizer_set_empty_cell_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_size get_cell_size(int row, int col) const", asFUNCTION(wx_grid_bag_sizer_get_cell_size), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_gb_position get_item_position(wx_window@)", asFUNCTION(wx_grid_bag_sizer_get_item_position_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_gb_position get_item_position(wx_sizer@)", asFUNCTION(wx_grid_bag_sizer_get_item_position_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_gb_position get_item_position(int index)", asFUNCTION(wx_grid_bag_sizer_get_item_position_index), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool set_item_position(wx_window@, const wx_gb_position &in pos)", asFUNCTION(wx_grid_bag_sizer_set_item_position_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool set_item_position(wx_sizer@, const wx_gb_position &in pos)", asFUNCTION(wx_grid_bag_sizer_set_item_position_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool set_item_position(int index, const wx_gb_position &in pos)", asFUNCTION(wx_grid_bag_sizer_set_item_position_index), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_gb_span get_item_span(wx_window@)", asFUNCTION(wx_grid_bag_sizer_get_item_span_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_gb_span get_item_span(wx_sizer@)", asFUNCTION(wx_grid_bag_sizer_get_item_span_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_gb_span get_item_span(int index)", asFUNCTION(wx_grid_bag_sizer_get_item_span_index), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool set_item_span(wx_window@, const wx_gb_span &in span)", asFUNCTION(wx_grid_bag_sizer_set_item_span_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool set_item_span(wx_sizer@, const wx_gb_span &in span)", asFUNCTION(wx_grid_bag_sizer_set_item_span_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool set_item_span(int index, const wx_gb_span &in span)", asFUNCTION(wx_grid_bag_sizer_set_item_span_index), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_sizer_item@ find_item(wx_window@)", asFUNCTION(wx_grid_bag_sizer_find_item_window), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_sizer_item@ find_item(wx_sizer@)", asFUNCTION(wx_grid_bag_sizer_find_item_sizer), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_sizer_item@ find_item_at_position(const wx_gb_position &in pos)", asFUNCTION(wx_grid_bag_sizer_find_item_at_position), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "wx_sizer_item@ find_item_at_point(const wx_point &in pt)", asFUNCTION(wx_grid_bag_sizer_find_item_at_point), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool check_for_intersection(const wx_gb_position &in pos, const wx_gb_span &in span)", asFUNCTION(wx_grid_bag_sizer_check_for_intersection_pos), asCALL_CDECL_OBJFIRST);
+
+// ---------------------------------------------------------------------------
+// REG_STATIC_BOX_SIZER_METHODS — wxStaticBoxSizer-only surface. The
+// box returned by GetStaticBox is owned by the parent window and lives
+// for the same period as the sizer itself; the wrapper uses
+// EnsureTracked so the bridge attaches a destroy hook on the first
+// retrieval, preventing stale entries in g_ref_counts.
+// ---------------------------------------------------------------------------
+#define REG_STATIC_BOX_SIZER_METHODS(name) \
+    engine->RegisterObjectMethod(name, "wx_static_box@ get_static_box() const property", asFUNCTION(wx_static_box_sizer_get_static_box), asCALL_CDECL_OBJFIRST);
+
 void register_key_codes(asIScriptEngine* engine) {
     engine->RegisterEnum("wx_key_code");
     #define REG_KEY(name) engine->RegisterEnumValue("wx_key_code", #name, name)
@@ -770,6 +948,36 @@ void register_all_types(asIScriptEngine* engine) {
     engine->RegisterEnumValue("wx_radio_button_style", "WX_RB_GROUP", wxRB_GROUP);
     engine->RegisterEnumValue("wx_radio_button_style", "WX_RB_SINGLE", wxRB_SINGLE);
 
+    // wxFlexGridSizer.SetFlexibleDirection accepts a wxOrientation value
+    // (wxHORIZONTAL/wxVERTICAL/wxBOTH), which already exists as wx_orientation
+    // above. The non-flexible-grow-mode is its own enum.
+    engine->RegisterEnum("wx_flex_sizer_grow_mode");
+    engine->RegisterEnumValue("wx_flex_sizer_grow_mode",
+        "WX_FLEX_GROWMODE_NONE", static_cast<int>(wxFLEX_GROWMODE_NONE));
+    engine->RegisterEnumValue("wx_flex_sizer_grow_mode",
+        "WX_FLEX_GROWMODE_SPECIFIED", static_cast<int>(wxFLEX_GROWMODE_SPECIFIED));
+    engine->RegisterEnumValue("wx_flex_sizer_grow_mode",
+        "WX_FLEX_GROWMODE_ALL", static_cast<int>(wxFLEX_GROWMODE_ALL));
+
+    // wxWrapSizer flag bitmask (in wx/wrapsizer.h, an anonymous enum). The
+    // default (used by the wx default ctor argument) is the OR of both,
+    // so expose it as a named value so script code reads symmetrically
+    // with the C++ side.
+    engine->RegisterEnum("wx_wrap_sizer_flag");
+    engine->RegisterEnumValue("wx_wrap_sizer_flag",
+        "WX_EXTEND_LAST_ON_EACH_LINE", wxEXTEND_LAST_ON_EACH_LINE);
+    engine->RegisterEnumValue("wx_wrap_sizer_flag",
+        "WX_REMOVE_LEADING_SPACES", wxREMOVE_LEADING_SPACES);
+    engine->RegisterEnumValue("wx_wrap_sizer_flag",
+        "WX_WRAPSIZER_DEFAULT_FLAGS", wxWRAPSIZER_DEFAULT_FLAGS);
+
+    // wxStaticBox has no dedicated style flags — it inherits wxControl
+    // styles. Register an empty enum anyway for naming symmetry with the
+    // other per-control style enums; AngelScript accepts an empty enum
+    // as a forward declaration that scripts can OR into the int passed
+    // to create_static_box.
+    engine->RegisterEnum("wx_static_box_style");
+
     engine->RegisterEnum("wx_user_attention");
     engine->RegisterEnumValue("wx_user_attention", "WX_USER_ATTENTION_INFO", wxUSER_ATTENTION_INFO);
     engine->RegisterEnumValue("wx_user_attention", "WX_USER_ATTENTION_ERROR", wxUSER_ATTENTION_ERROR);
@@ -838,6 +1046,43 @@ void register_all_types(asIScriptEngine* engine) {
     REG_TEXT_ENTRY_METHODS("wx_text_entry");
     REGISTER_WX_SIZER("wx_sizer", wxSizer);
     REGISTER_WX_SIZER("wx_box_sizer", wxBoxSizer);
+    REG_BOX_SIZER_METHODS("wx_box_sizer");
+
+    // wx_grid_sizer / wx_flex_grid_sizer / wx_grid_bag_sizer form a
+    // chain in C++ (each derives from the previous), but on the AS
+    // side asOBJ_REF types do not transitively inherit methods, so
+    // every leaf type re-registers each level's surface. The chain is
+    // wxSizer (REG_SIZER_METHODS) → wxGridSizer (REG_GRID_SIZER_METHODS)
+    //   → wxFlexGridSizer (REG_FLEX_GRID_SIZER_METHODS)
+    //   → wxGridBagSizer (REG_GRID_BAG_SIZER_METHODS).
+    REGISTER_WX_SIZER("wx_grid_sizer", wxGridSizer);
+    REG_GRID_SIZER_METHODS("wx_grid_sizer");
+
+    REGISTER_WX_SIZER("wx_flex_grid_sizer", wxFlexGridSizer);
+    REG_GRID_SIZER_METHODS("wx_flex_grid_sizer");
+    REG_FLEX_GRID_SIZER_METHODS("wx_flex_grid_sizer");
+
+    REGISTER_WX_SIZER("wx_grid_bag_sizer", wxGridBagSizer);
+    REG_GRID_SIZER_METHODS("wx_grid_bag_sizer");
+    REG_FLEX_GRID_SIZER_METHODS("wx_grid_bag_sizer");
+    REG_GRID_BAG_SIZER_METHODS("wx_grid_bag_sizer");
+
+    // wxWrapSizer derives from wxBoxSizer; wxStaticBoxSizer also derives
+    // from wxBoxSizer. Neither adds many wx-only methods, but both
+    // expose the box-sizer orientation property.
+    REGISTER_WX_SIZER("wx_wrap_sizer", wxWrapSizer);
+    REG_BOX_SIZER_METHODS("wx_wrap_sizer");
+
+    // wxStaticBox is registered before wx_static_box_sizer because the
+    // sizer's GetStaticBox accessor returns a wx_static_box@; AS rejects
+    // method registrations whose argument or return type has not been
+    // declared yet.
+    REGISTER_WX_CONTROL("wx_static_box", wxStaticBox);
+
+    REGISTER_WX_SIZER("wx_static_box_sizer", wxStaticBoxSizer);
+    REG_BOX_SIZER_METHODS("wx_static_box_sizer");
+    REG_STATIC_BOX_SIZER_METHODS("wx_static_box_sizer");
+
     REGISTER_WX_TLW("wx_frame", wxFrame);
     REGISTER_WX_WINDOW("wx_panel", wxPanel);
     REGISTER_WX_CONTROL("wx_button", wxButton);

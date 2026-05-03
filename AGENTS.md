@@ -556,7 +556,7 @@ dangling pointer the bridge cannot rescue.
 
 ## Value-type conventions (geometry and colour)
 
-The bridge exposes five value types to scripts:
+The bridge exposes seven value types to scripts:
 
 - `wx_point` — alias of `wxPoint` (two `int`s, `x` / `y`).
 - `wx_size`  — alias of `wxSize` (two `int`s, exposed as `width` /
@@ -582,6 +582,21 @@ The bridge exposes five value types to scripts:
   **not** registered as AS methods because they would collide with
   the bool properties of the same name; scripts that need a copy can
   do `wx_font copy = font; copy.underlined = true;`.
+- `wx_gb_position` — POD struct of two `int`s (`row` / `col`). Mirrors
+  `wxGBPosition`, used by `wxGridBagSizer` to address grid cells.
+  Convert at the boundary with `to_wx(wx_gb_position)` /
+  `from_wx(wxGBPosition)`; both are `inline` in `common.h`.
+- `wx_gb_span` — POD struct of two `int`s (`rowspan` / `colspan`),
+  default-constructed to (1, 1). Mirrors `wxGBSpan`. The boundary
+  helper `to_wx(wx_gb_span)` rounds non-positive members up to 1
+  because `wxGBSpan` asserts on (`<= 0`); pass `wx_gb_span(1, 1)`
+  for the explicit "default span" sentinel.
+
+For `wx_gb_position` / `wx_gb_span` we do not use `offsetof` to bind
+to the underlying `wxGBPosition` / `wxGBSpan`: those classes hide
+their members behind `m_row`/`m_col`/`m_rowspan`/`m_colspan` getters
+and the layout could change between minor wx versions. The AS-side
+mirror gives the bridge a layout it controls.
 
 Why aliases rather than fresh types for the first three: `wxPoint`,
 `wxSize` and `wxRect` are documented by upstream as plain `int`
@@ -702,9 +717,41 @@ the ints natively and casts inside.
   size / calc-min / min-size{,-with-border} / max-size{,-with-border}
   / rect / position / spacer; set-init-size; set-ratio (size or
   float); is-{window,sizer,spacer,shown}; show; detach / delete.
-- **`wxBoxSizer`** — currently only inherits the `wxSizer` surface.
-  No `wx_grid_sizer`, `wx_flex_grid_sizer`, `wx_grid_bag_sizer` or
-  `wx_wrap_sizer` yet.
+- **`wxBoxSizer`** — `wxSizer` surface plus the box-specific
+  `orientation` property (`get_orientation` / `set_orientation`) and
+  `is_vertical()` predicate.
+- **`wxGridSizer`** — `wxSizer` surface plus grid-specific properties
+  (`cols`, `rows`, `vgap`, `hgap`) and the read-only effective-count
+  properties (`effective_cols_count`, `effective_rows_count`) plus
+  `calc_rows_cols(int &out, int &out)`.
+- **`wxFlexGridSizer`** — `wxGridSizer` surface plus
+  `add_growable_row` / `add_growable_col` (proportion defaulting to 0),
+  `remove_growable_row` / `remove_growable_col`, `is_row_growable` /
+  `is_col_growable`, `flexible_direction` property (`wxOrientation`)
+  and `non_flexible_grow_mode` property (`wx_flex_sizer_grow_mode`).
+- **`wxGridBagSizer`** — `wxFlexGridSizer` surface plus the
+  position/span-aware `add` overloads (window / sizer / spacer),
+  `get_item_position` / `set_item_position` (window / sizer / index
+  variants), `get_item_span` / `set_item_span` (variants), the
+  `empty_cell_size` property, `get_cell_size(row, col)`, the
+  `find_item` (window / sizer / position / point) family and
+  `check_for_intersection`. Scripts must use the position/span `add`
+  on grid_bag — the proportion-based `add` inherited from `wxSizer`
+  asserts inside wxWidgets because grid-bag insertion requires a
+  `wxGBSizerItem`.
+- **`wxWrapSizer`** — `wxBoxSizer` surface only. Wrap behaviour is
+  controlled at construction time through `wx_wrap_sizer_flag`
+  (`WX_EXTEND_LAST_ON_EACH_LINE` / `WX_REMOVE_LEADING_SPACES` /
+  `WX_WRAPSIZER_DEFAULT_FLAGS`).
+- **`wxStaticBox`** — registered as a `wx_control` so it can be passed
+  to `wx_static_box_sizer` constructors and so events on it are
+  routable through the bridge. wxStaticBox itself has no per-class
+  methods; the empty `wx_static_box_style` enum is registered for
+  symmetry with the other per-control style enums.
+- **`wxStaticBoxSizer`** — `wxBoxSizer` surface plus the
+  read-only `static_box` property (returns `wx_static_box@`,
+  `EnsureTracked`-attached so the destroy hook is wired the first time
+  the bridge sees the box).
 - **Concrete widgets** — `wx_frame`, `wx_panel`, `wx_button`,
   `wx_check_box` (`get_value` / `set_value` / `Get3StateValue` /
   `Set3StateValue` / `is_3rd_state_allowed_for_user` / `is_3state` /
@@ -725,6 +772,8 @@ the ints natively and casts inside.
   `wxFromString`), encoding, fractional point sizes, font-info
   builders.
 - **Manager** — `wx::update`, `wx::create_{frame,button,check_box,box_sizer,
+  grid_sizer,flex_grid_sizer,grid_bag_sizer,wrap_sizer,static_box,
+  static_box_sizer,static_box_sizer_for_box,
   panel,static_text,text_control,radio_button}`. `create_frame` takes
   a `wx_size` for the initial window size.
 
@@ -738,13 +787,22 @@ rename something here, update this section in the same PR.
   every geometry / colour accessor uses them as properties; the
   monolithic `wx_style` enum is split into one enum per control
   family. Breaking change vs. earlier PRs.
-- **Phase 0 (this PR) — remaining foundation work.** `wx_font` value
+- **Phase 0 (done) — remaining foundation work.** `wx_font` value
   type with full property + modifier surface, `wx_window.font`
   property, `wx_font_family` / `wx_font_style` / `wx_font_weight`
   enums, `wxEntryCleanup()` paired with `wxEntryStart()` through a
   static `WxLifecycleGuard` (the function-level destructor that
   fires on `DLL_PROCESS_DETACH`).
-- **Phase 1 — basic GUI:** the rest of the sizers; dialogs
+- **Phase 1a (this PR) — remaining sizers.** `wx_grid_sizer`,
+  `wx_flex_grid_sizer`, `wx_grid_bag_sizer`, `wx_wrap_sizer`,
+  `wx_static_box_sizer` (and `wx_static_box` as a control); two new
+  POD value types `wx_gb_position` / `wx_gb_span` for grid-bag cell
+  addressing; per-sizer style/flag enums (`wx_flex_sizer_grow_mode`,
+  `wx_wrap_sizer_flag`, empty `wx_static_box_style`); the box-sizer
+  orientation accessor (`get_orientation` / `set_orientation` /
+  `is_vertical`) is now exposed on every `wxBoxSizer`-derived bridge
+  type.
+- **Phase 1 — basic GUI (in progress):** dialogs
   (`wx_dialog`, `wx_message_dialog`, `wx_file_dialog`, …); selectors
   (`wx_choice`, `wx_combo_box`, `wx_list_box`, `wx_radio_box`); range
   controls (`wx_slider`, `wx_gauge`, `wx_spin_ctrl`); pickers; books

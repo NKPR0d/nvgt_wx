@@ -24,6 +24,9 @@
 #include <wx/wx.h>
 #include <wx/evtloop.h>
 #include <wx/font.h>
+#include <wx/gbsizer.h>
+#include <wx/wrapsizer.h>
+#include <wx/statbox.h>
 
 // nvgt_plugin.h emits *definitions* of plugin_version() and the
 // asGetLibraryVersion / asAcquireExclusiveLock / nvgt_wait / ... function
@@ -80,6 +83,49 @@ inline wx_colour from_wx(const wxColour& c) {
     out.b = c.Blue();
     out.a = c.Alpha();
     return out;
+}
+
+// wxGBPosition / wxGBSpan are used by wxGridBagSizer to address cells in
+// a (row, column) grid and to span a sizer item across multiple cells.
+// The wx classes hold the values in *private* members (m_row/m_col,
+// m_rowspan/m_colspan), so AngelScript cannot register them as a value
+// type with direct member access via offsetof — the layout would not be
+// stable and the members are inaccessible anyway. Mirror the wx_colour
+// pattern: expose AS-side POD structs with public int members and convert
+// at the boundary with to_wx / from_wx. The AS-side names use `row`/`col`
+// (wx-style) instead of `x`/`y` because grids are conceptually a (row,
+// column) coordinate system, not a pixel one.
+struct wx_gb_position {
+    int row;
+    int col;
+};
+static_assert(sizeof(wx_gb_position) == 2 * sizeof(int),
+              "wx_gb_position must be a packed pair of ints");
+
+struct wx_gb_span {
+    int rowspan;
+    int colspan;
+};
+static_assert(sizeof(wx_gb_span) == 2 * sizeof(int),
+              "wx_gb_span must be a packed pair of ints");
+
+inline wxGBPosition to_wx(const wx_gb_position& p) {
+    return wxGBPosition(p.row, p.col);
+}
+inline wx_gb_position from_wx(const wxGBPosition& p) {
+    return wx_gb_position{p.GetRow(), p.GetCol()};
+}
+inline wxGBSpan to_wx(const wx_gb_span& s) {
+    // wxGBSpan asserts rowspan/colspan > 0; default-construct and round
+    // negatives/zeros up to 1 so a poorly-validated script value cannot
+    // assert in wxWidgets. Scripts that want the sentinel "default span"
+    // can pass wx_gb_span{1, 1} explicitly.
+    int r = s.rowspan > 0 ? s.rowspan : 1;
+    int c = s.colspan > 0 ? s.colspan : 1;
+    return wxGBSpan(r, c);
+}
+inline wx_gb_span from_wx(const wxGBSpan& s) {
+    return wx_gb_span{s.GetRowspan(), s.GetColspan()};
 }
 
 // ---------------------------------------------------------------------------
@@ -392,6 +438,63 @@ void wx_sizer_item_set_ratio_float(wxSizerItem* self, float ratio);
 void wx_sizer_item_detach_window(wxSizerItem* self);
 void wx_sizer_item_detach_sizer(wxSizerItem* self);
 void wx_sizer_item_delete_windows(wxSizerItem* self);
+
+// ---------------------------------------------------------------------------
+// wxGridSizer / wxFlexGridSizer / wxGridBagSizer / wxWrapSizer /
+// wxStaticBoxSizer adapters. Most accessors that take/return geometry
+// or pure ints are bound directly via asMETHOD; the wrappers here cover
+// signatures with wx-only types (wxGBPosition / wxGBSpan / wxFlexSizerGrowMode),
+// the size_t -> int conversion for index-based getters and the few wx
+// methods whose C++ defaults asMETHOD does not propagate.
+// ---------------------------------------------------------------------------
+int wx_grid_sizer_get_effective_cols_count(wxGridSizer* self);
+int wx_grid_sizer_get_effective_rows_count(wxGridSizer* self);
+void wx_grid_sizer_calc_rows_cols(wxGridSizer* self, int& rows, int& cols);
+
+void wx_flex_grid_sizer_add_growable_row(wxFlexGridSizer* self, int idx, int proportion);
+void wx_flex_grid_sizer_remove_growable_row(wxFlexGridSizer* self, int idx);
+void wx_flex_grid_sizer_add_growable_col(wxFlexGridSizer* self, int idx, int proportion);
+void wx_flex_grid_sizer_remove_growable_col(wxFlexGridSizer* self, int idx);
+bool wx_flex_grid_sizer_is_row_growable(wxFlexGridSizer* self, int idx);
+bool wx_flex_grid_sizer_is_col_growable(wxFlexGridSizer* self, int idx);
+int wx_flex_grid_sizer_get_non_flexible_grow_mode(wxFlexGridSizer* self);
+void wx_flex_grid_sizer_set_non_flexible_grow_mode(wxFlexGridSizer* self, int mode);
+
+void wx_grid_bag_sizer_add_window(wxGridBagSizer* self, wxWindow* win,
+                                  const wx_gb_position& pos, const wx_gb_span& span,
+                                  int flag, int border);
+void wx_grid_bag_sizer_add_sizer(wxGridBagSizer* self, wxSizer* sizer,
+                                 const wx_gb_position& pos, const wx_gb_span& span,
+                                 int flag, int border);
+void wx_grid_bag_sizer_add_spacer(wxGridBagSizer* self, int width, int height,
+                                  const wx_gb_position& pos, const wx_gb_span& span,
+                                  int flag, int border);
+wx_size wx_grid_bag_sizer_get_empty_cell_size(wxGridBagSizer* self);
+void wx_grid_bag_sizer_set_empty_cell_size(wxGridBagSizer* self, const wx_size& s);
+wx_size wx_grid_bag_sizer_get_cell_size(wxGridBagSizer* self, int row, int col);
+wx_gb_position wx_grid_bag_sizer_get_item_position_window(wxGridBagSizer* self, wxWindow* win);
+wx_gb_position wx_grid_bag_sizer_get_item_position_sizer(wxGridBagSizer* self, wxSizer* s);
+wx_gb_position wx_grid_bag_sizer_get_item_position_index(wxGridBagSizer* self, int index);
+bool wx_grid_bag_sizer_set_item_position_window(wxGridBagSizer* self, wxWindow* win, const wx_gb_position& pos);
+bool wx_grid_bag_sizer_set_item_position_sizer(wxGridBagSizer* self, wxSizer* s, const wx_gb_position& pos);
+bool wx_grid_bag_sizer_set_item_position_index(wxGridBagSizer* self, int index, const wx_gb_position& pos);
+wx_gb_span wx_grid_bag_sizer_get_item_span_window(wxGridBagSizer* self, wxWindow* win);
+wx_gb_span wx_grid_bag_sizer_get_item_span_sizer(wxGridBagSizer* self, wxSizer* s);
+wx_gb_span wx_grid_bag_sizer_get_item_span_index(wxGridBagSizer* self, int index);
+bool wx_grid_bag_sizer_set_item_span_window(wxGridBagSizer* self, wxWindow* win, const wx_gb_span& span);
+bool wx_grid_bag_sizer_set_item_span_sizer(wxGridBagSizer* self, wxSizer* s, const wx_gb_span& span);
+bool wx_grid_bag_sizer_set_item_span_index(wxGridBagSizer* self, int index, const wx_gb_span& span);
+wxSizerItem* wx_grid_bag_sizer_find_item_window(wxGridBagSizer* self, wxWindow* win);
+wxSizerItem* wx_grid_bag_sizer_find_item_sizer(wxGridBagSizer* self, wxSizer* s);
+wxSizerItem* wx_grid_bag_sizer_find_item_at_position(wxGridBagSizer* self, const wx_gb_position& pos);
+wxSizerItem* wx_grid_bag_sizer_find_item_at_point(wxGridBagSizer* self, const wx_point& pt);
+bool wx_grid_bag_sizer_check_for_intersection_pos(wxGridBagSizer* self, const wx_gb_position& pos, const wx_gb_span& span);
+
+// wxStaticBoxSizer: GetStaticBox returns a borrowed pointer to the static
+// box owned by the sizer's parent window. EnsureTracked attaches a
+// destroy hook the first time the bridge sees the box, so we don't end
+// up with a stale entry after the window dies.
+wxStaticBox* wx_static_box_sizer_get_static_box(wxStaticBoxSizer* self);
 
 wxTextEntry* GetEntry(wxWindow* win);
 std::string wx_text_entry_get_value(wxWindow* self);
