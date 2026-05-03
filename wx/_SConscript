@@ -19,14 +19,7 @@ if plugin_env["PLATFORM"] == "win32":
     plugin_env.Append(CPPDEFINES=[
         "UNICODE", "_UNICODE", 
         "WXUSINGDLL", 
-        "__WXMSW__",
-        # ANGELSCRIPT_DLL_MANUAL_IMPORT switches angelscript.h from
-        # extern-function declarations to extern-function-pointer
-        # declarations populated by prepare_plugin() at runtime.
-        # nvgt_plugin.h sets this for every TU that includes it,
-        # but the vendored scriptarray.cpp does not — so define it
-        # at the build level for every source uniformly.
-        "ANGELSCRIPT_DLL_MANUAL_IMPORT"
+        "__WXMSW__"
     ])
 
 shared_lib = plugin_env.SharedLibrary(

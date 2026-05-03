@@ -1,3 +1,23 @@
+// nvgt_wx vendoring note (local addition, not present upstream):
+// Pull in nvgt_plugin.h with NVGT_PLUGIN_INCLUDE set BEFORE scriptarray.h.
+// nvgt_plugin.h:
+//   1. Defines ANGELSCRIPT_DLL_MANUAL_IMPORT (because we are not nvgt
+//      itself), which strips the ordinary function declarations of
+//      asAllocMem / asAcquireExclusiveLock / asGetActiveContext / … out
+//      of the subsequent <angelscript.h>.
+//   2. Includes <angelscript.h> (so the AS types CScriptArray needs are
+//      available).
+//   3. Declares the AS runtime symbols as extern function-pointer
+//      variables (`extern t_asAllocMem* asAllocMem;` and friends),
+//      because NVGT_PLUGIN_INCLUDE is set so this TU only consumes
+//      them, it does not own the storage — wx.cpp does.
+// Without this include scriptarray.cpp's <angelscript.h> would see no
+// asAllocMem/asAcquireExclusiveLock/asGetActiveContext declarations at
+// all (the manual-import define strips them), and MSVC fails with
+// "identifier not found" for ~30 call sites.
+#define NVGT_PLUGIN_INCLUDE
+#include "../../../src/nvgt_plugin.h"
+
 #include <new>
 #include <stdlib.h>
 #include <string.h>

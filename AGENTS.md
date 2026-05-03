@@ -392,11 +392,26 @@ compiled into `nvgt_wx.dll` along with the rest of the bridge.
 
 The vendored copy comes from NVGT's
 [`ASAddon/{include,src}/scriptarray.{h,cpp}`](https://github.com/samtupy/nvgt).
-**Do not modify it locally** — bumping the upstream version is the
-intended way to incorporate fixes. If NVGT bumps its bundled copy,
-re-vendor in the same PR (and leave a note here).
+**Treat it as upstream code** — when NVGT bumps its bundled copy,
+re-vendor in the same PR (and leave a note here). The local copy
+carries two clearly marked nvgt_wx-only additions, both at the top of
+`scriptarray.cpp` and tagged `nvgt_wx vendoring note`. When
+re-vendoring, diff against upstream, drop in the new file, then re-
+apply the additions.
 
-Two NVGT-specific gotchas to keep in mind when re-vendoring:
+Local additions:
+
+- `userAlloc` / `userFree` initialised to `nullptr` (instead of
+  `asAllocMem` / `asFreeMem`) and routed through a wrapper that
+  reads the current pointer at call time. See gotcha #1 below.
+- `#define NVGT_PLUGIN_INCLUDE` followed by
+  `#include "../../../src/nvgt_plugin.h"` BEFORE everything else,
+  so the AS runtime symbols (`asAllocMem` / `asFreeMem` /
+  `asGetActiveContext` / `asAcquireExclusiveLock` / `asAtomicInc`
+  / `asAtomicDec` / …) are visible as extern function-pointer
+  variables when scriptarray.cpp is compiled. See gotcha #3 below.
+
+Three NVGT-specific gotchas to keep in mind when re-vendoring:
 
 1. NVGT plugins link with `ANGELSCRIPT_DLL_MANUAL_IMPORT`, so
    `asAllocMem` / `asFreeMem` are function-pointer **variables**
@@ -411,17 +426,22 @@ Two NVGT-specific gotchas to keep in mind when re-vendoring:
    `.github/workflows/build-windows.yml`. There is no glob — a
    missing entry will silently link a `nvgt_wx.dll` whose
    `array<T>` calls hit unresolved symbols at runtime.
-3. Unlike every other TU in this plugin, `scriptarray.cpp` does
-   **not** include `nvgt_plugin.h`, so it does not pick up the
-   `ANGELSCRIPT_DLL_MANUAL_IMPORT` define automatically. Both
-   build configurations (`_SConscript` `CPPDEFINES` and the CI
-   workflow's `cppArgs`) therefore set
-   `/DANGELSCRIPT_DLL_MANUAL_IMPORT` at the build level for every
-   source uniformly. Without that, scriptarray.cpp's
-   `#include <angelscript.h>` declares `asAllocMem` /
-   `asAcquireExclusiveLock` / … as ordinary externs and the
-   linker fails with `LNK2019 unresolved external symbol` for
-   eight AS runtime functions.
+3. Plain `<angelscript.h>` is *not enough* on its own.
+   Defining `ANGELSCRIPT_DLL_MANUAL_IMPORT` strips the AS runtime
+   functions out of `<angelscript.h>` entirely; the function-
+   pointer variables that take their place are declared by
+   `nvgt_plugin.h`, not by `<angelscript.h>`. So the vendored
+   `scriptarray.cpp` carries the local addition above
+   (`#define NVGT_PLUGIN_INCLUDE` + `#include "../../../src/nvgt_plugin.h"`
+   at the very top) instead of relying on a build-level
+   `/DANGELSCRIPT_DLL_MANUAL_IMPORT` flag. Two reasons not to use
+   the build-level flag: (a) without nvgt_plugin.h's symbol
+   declarations the strip leaves `asAllocMem` / `asAtomicInc` /
+   … completely undeclared and MSVC fails with `C2065`/`C3861`
+   for ~30 call sites, and (b) every *other* TU already includes
+   nvgt_plugin.h (which `#define`s `ANGELSCRIPT_DLL_MANUAL_IMPORT`
+   internally), so a global `/D` flag would cause MSVC C4005
+   redefinition warnings on every other source.
 
 ## Naming and code conventions
 
