@@ -56,7 +56,10 @@ jobs:
         #   include path : wx/include + wx/lib/mswu (vendored wxWidgets 3.3.2)
         #                + as_include (downloaded angelscript.h)
         #   defines      : UNICODE _UNICODE WXUSINGDLL __WXMSW__
-        #   sources      : wx.cpp + src/{runtime,helpers,manager,register}.cpp
+        #   sources      : wx.cpp + src/{runtime,helpers,manager,register,
+        #                  scriptarray}.cpp (scriptarray.cpp is the AngelScript
+        #                  add-on vendored verbatim from samtupy/nvgt — see
+        #                  AGENTS.md "scriptarray vendoring" for why)
         #   libs         : wxmsw33u_core.lib wxbase33u.lib (import libs;
         #                  WXUSINGDLL means the actual code lives in the
         #                  wxmsw332u_core_vc14x_x64.dll shipped under wx/dll/)
@@ -71,7 +74,8 @@ jobs:
             'src/runtime.cpp',
             'src/helpers.cpp',
             'src/manager.cpp',
-            'src/register.cpp'
+            'src/register.cpp',
+            'src/scriptarray.cpp'
           )
 
           $cppArgs = @(

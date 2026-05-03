@@ -30,6 +30,7 @@ shared_lib = plugin_env.SharedLibrary(
         "src/helpers.cpp",
         "src/manager.cpp",
         "src/register.cpp",
+        "src/scriptarray.cpp",
     ]
 )
 

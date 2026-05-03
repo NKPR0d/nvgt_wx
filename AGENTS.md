@@ -294,10 +294,25 @@ emulates the wxWidgets hierarchy with explicit cast methods:
   implemented through `dynamic_cast`. This is explicit because it can
   fail.
 
-`wx_text_entry` is a special case: `wxTextEntry` is a mixin (not a
-`wxWindow`), so the plugin smuggles a `wxWindow*` through the
-`wx_text_entry` handle and `dynamic_cast`s back to `wxTextEntry*` in
-each method.
+`wx_text_entry` and `wx_item_container` are special cases: `wxTextEntry`
+and `wxItemContainer` are mixins (not `wxWindow`s), so the plugin
+smuggles a `wxWindow*` through the AS-side handle and `dynamic_cast`s
+back to the mixin pointer (`wxTextEntry*` / `wxItemContainer*` /
+`wxItemContainerImmutable*`) in each method. The cast-helper templates
+(`to_text_entry_as_win`, `to_item_container_as_win` in `common.h`) are
+the `opImplCast` glue: a concrete control hands its `wxControl*` to the
+helper, which slices it to `wxWindow*` for the mixin handle.
+
+`wxComboBox` is the awkward case because it derives from BOTH mixins
+*and* their AS method names overlap on `clear`, `is_empty` and
+`get_string_selection`. The split between
+`REG_ITEM_CONTAINER_FULL_METHODS` and `REG_ITEM_CONTAINER_BASE_METHODS`
+in `register.cpp` exists to disambiguate: most concrete types apply
+the FULL macro, but `wx_combo_box` only applies BASE and resurfaces
+the dropped three methods under disambiguated names
+(`is_list_empty` / `clear_items` / `get_item_string_selection`).
+This mirrors what `wxComboBoxBase::IsListEmpty`/`IsTextEmpty` does in
+C++.
 
 Adding a new control therefore looks like:
 
@@ -360,6 +375,42 @@ outliving the sizer it came from.** A `wx_sizer_item@` borrowed before
 the cleanup is fine; one held across a `sizer.clear()`, a `frame.destroy()`
 of the containing window, or any explicit `replace`/`detach` call is a
 dangling pointer the bridge cannot rescue.
+
+### scriptarray vendoring
+
+`array<T>` on the AngelScript side is provided by the AS standard
+`scriptarray` add-on. NVGT registers it once on the engine before
+plugins load — the plugin must NOT register it again. What the plugin
+*does* need is the `class CScriptArray` definition itself, because the
+selector wrappers in `helpers.cpp` (`as_array_to_wx_strings`,
+`wx_strings_to_as_array`, `wx_ints_to_as_array`,
+`wx_item_container_append_many`, …) call `CScriptArray::GetSize`,
+`At`, `SetValue`, `Create` and friends. To get those definitions
+without forcing every plugin author to ship the same source, the
+add-on is vendored in this repo as `wx/src/scriptarray.{h,cpp}` and
+compiled into `nvgt_wx.dll` along with the rest of the bridge.
+
+The vendored copy comes from NVGT's
+[`ASAddon/{include,src}/scriptarray.{h,cpp}`](https://github.com/samtupy/nvgt).
+**Do not modify it locally** — bumping the upstream version is the
+intended way to incorporate fixes. If NVGT bumps its bundled copy,
+re-vendor in the same PR (and leave a note here).
+
+Two NVGT-specific gotchas to keep in mind when re-vendoring:
+
+1. NVGT plugins link with `ANGELSCRIPT_DLL_MANUAL_IMPORT`, so
+   `asAllocMem` / `asFreeMem` are function-pointer **variables**
+   that are null at static-init time — they only become valid
+   after `prepare_plugin()` runs. The vendored copy must NOT freeze
+   those pointers into static variables (e.g. via
+   `static auto userAlloc = asAllocMem;`); each call has to read
+   them fresh. This is how upstream NVGT already writes it; just
+   don't "optimise" it back.
+2. `scriptarray.cpp` must be added to **both** `wx/_SConscript`
+   (`source=[...]`) and the `$sources` list in
+   `.github/workflows/build-windows.yml`. There is no glob — a
+   missing entry will silently link a `nvgt_wx.dll` whose
+   `array<T>` calls hit unresolved symbols at runtime.
 
 ## Naming and code conventions
 
@@ -649,6 +700,21 @@ Style bitmasks are split into per-control enums:
 |                          | `WX_CHK_ALLOW_3RD_STATE_FOR_USER`   |
 | `wx_text_ctrl_style`     | `WX_TE_*`                           |
 | `wx_radio_button_style`  | `WX_RB_GROUP`, `WX_RB_SINGLE`       |
+| `wx_choice_style`        | `WX_CB_SORT`                        |
+| `wx_combo_box_style`     | `WX_CB_SIMPLE`, `WX_CB_DROPDOWN`,   |
+|                          | `WX_CB_READONLY`, `WX_CB_SORT`,     |
+|                          | `WX_TE_PROCESS_ENTER`,              |
+|                          | `WX_TE_PROCESS_TAB`                 |
+| `wx_list_box_style`      | `WX_LB_SINGLE`, `WX_LB_MULTIPLE`,   |
+|                          | `WX_LB_EXTENDED`, `WX_LB_HSCROLL`,  |
+|                          | `WX_LB_ALWAYS_SB`, `WX_LB_NEEDED_SB`,|
+|                          | `WX_LB_NO_SB`, `WX_LB_SORT`,        |
+|                          | `WX_LB_INT_HEIGHT`                  |
+| `wx_radio_box_style`     | `WX_RA_SPECIFY_ROWS`,               |
+|                          | `WX_RA_SPECIFY_COLS`,               |
+|                          | `WX_RA_HORIZONTAL`, `WX_RA_VERTICAL`,|
+|                          | `WX_RA_LEFTTORIGHT`,                |
+|                          | `WX_RA_TOPTOBOTTOM`                 |
 
 Two reasons not to merge them back into a single `wx_style`:
 
@@ -762,10 +828,61 @@ the ints natively and casts inside.
   `is_checked`), `wx_static_text` (`wrap`), `wx_text_control` (full
   `wxTextEntry` surface), `wx_radio_button` (`get_value` / `set_value`
   / first/last/next/previous-in-group).
+- **`wxItemContainer` mix-in** (consumed by `wx_choice`, `wx_combo_box`,
+  `wx_list_box`) — read surface: `count` / `is_empty` / `get_string` /
+  `set_string` / `find_string` / `selection` / `select` /
+  `string_selection` / `set_string_selection` / `get_strings` (returns
+  `array<string>@`) / `is_sorted`. Mutate surface: `append(string)` /
+  `append(array<string>@)` / `insert(string, int)` /
+  `insert(array<string>@, int)` / `set(array<string>@)` / `clear` /
+  `delete_item(int)`. Same trick as `wx_text_entry`: every wrapper
+  takes a `wxWindow*` and `dynamic_cast`s internally to
+  `wxItemContainer{,Immutable}` (see `helpers.cpp/GetItemContainer`).
+  `wx_combo_box` only inherits the non-conflicting subset because
+  `wxComboBox` is also a `wxTextEntry`; the colliding three names
+  (`clear` / `is_empty` / `get_string_selection`) take their text-
+  entry semantics there, and the item-list semantics are exposed
+  under the disambiguated names `clear_items` / `is_list_empty` /
+  `get_item_string_selection` (mirrors `wxComboBoxBase::IsListEmpty`).
+  wxRadioBox derives only from `wxItemContainerImmutable` and is
+  *not* assignable to `wx_item_container@`; the read-only half of the
+  surface is duplicated directly on `wx_radio_box`.
+- **`wx_choice`** — `wx_item_container` surface plus
+  `get_current_selection`, `columns` property (`get_columns` /
+  `set_columns`).
+- **`wx_combo_box`** — `wx_item_container` (BASE subset) and
+  `wx_text_entry` surfaces, plus `get_current_selection`, `popup`,
+  `dismiss`. ClientData (`SetClientData` / `GetClientData`) is not
+  exposed because the bridge has no mechanism for smuggling AS
+  handles through `wxObject`.
+- **`wx_list_box`** — `wx_item_container` surface plus the multi-
+  selection accessors (`is_selected`, `set_selection_multi(int, bool)`
+  exposed under a distinct name to avoid clashing with the single-
+  selection `set_selection(int)` property, `deselect`, `deselect_all`,
+  `get_selections() → array<int>@`), the scroll/visibility helpers
+  (`set_first_item(int)` / `set_first_item(string)` / `ensure_visible`
+  / `top_item` / `count_per_page` / `append_and_ensure_visible`), and
+  the predicates `has_multiple_selection` / `hit_test(wx_point)`.
+- **`wx_radio_box`** — duplicated read-only `wxItemContainer` surface
+  (`count` / `is_empty` / `get_string` / `set_string` / `find_string`
+  / `selection` / `string_selection` / `set_string_selection`) plus
+  the radiobox-specific per-item state accessors (`enable_item` /
+  `show_item` / `is_item_enabled` / `is_item_shown`), layout
+  accessors (`column_count` / `row_count`), per-item help text
+  (`get_item_help_text` / `set_item_help_text`), and the navigation
+  helpers `get_item_from_point(wx_point)` /
+  `get_next_item(int, wx_direction, int)`. No mutators (Append /
+  Insert / Clear / Delete) — wxRadioBox freezes its set of buttons
+  at construction.
 - **Events** — `wx_event` (skip, type, event-object), `wx_key_event`
   (key code, unicode, modifier helpers), `wx_mouse_event` (xy,
   buttons, dclick), `wx_command_event` (string / int / extra-long
-  / selection / is-checked / is-selection).
+  / selection / is-checked / is-selection). Selector event types
+  registered: `WX_EVT_CHOICE`, `WX_EVT_COMBOBOX`,
+  `WX_EVT_COMBOBOX_DROPDOWN`, `WX_EVT_COMBOBOX_CLOSEUP`,
+  `WX_EVT_LISTBOX`, `WX_EVT_LISTBOX_DCLICK`, `WX_EVT_RADIOBOX`. The
+  combo-box also fires the existing `WX_EVT_TEXT` /
+  `WX_EVT_TEXT_ENTER` from the text-entry side.
 - **`wxFont`** — exposed as the `wx_font` value type. Default + full
   ctor (size / family / style / weight / underlined / face_name) +
   copy ctor + `opAssign`. Properties: `point_size`, `pixel_size`,
@@ -778,8 +895,14 @@ the ints natively and casts inside.
 - **Manager** — `wx::update`, `wx::create_{frame,button,check_box,box_sizer,
   grid_sizer,flex_grid_sizer,grid_bag_sizer,wrap_sizer,static_box,
   static_box_sizer,static_box_sizer_for_box,
-  panel,static_text,text_control,radio_button}`. `create_frame` takes
-  a `wx_size` for the initial window size.
+  panel,static_text,text_control,radio_button,
+  choice,combo_box,list_box,radio_box}`. `create_frame` takes a
+  `wx_size` for the initial window size; the four selector factories
+  take an optional `array<string>@ items` (defaulting to `null`) for
+  the initial item list, except `create_radio_box` which requires
+  the items array (an empty radio box is rejected with `nullptr`
+  because wxRadioBox asserts on it). `create_radio_box` defaults
+  `style` to `WX_RA_SPECIFY_COLS` to match wxWidgets' own default.
 
 This list is the source of truth for "what works"; if you remove or
 rename something here, update this section in the same PR.
@@ -806,9 +929,17 @@ rename something here, update this section in the same PR.
   orientation accessor (`get_orientation` / `set_orientation` /
   `is_vertical`) is now exposed on every `wxBoxSizer`-derived bridge
   type.
+- **Phase 1b (this PR) — selectors.** `wx_choice`, `wx_combo_box`,
+  `wx_list_box`, `wx_radio_box`. New `wx_item_container` mix-in
+  type (modelled on `wx_text_entry`); per-control style enums
+  (`wx_choice_style`, `wx_combo_box_style`, `wx_list_box_style`,
+  `wx_radio_box_style`); selector event types
+  (`WX_EVT_CHOICE`, `WX_EVT_COMBOBOX*`, `WX_EVT_LISTBOX*`,
+  `WX_EVT_RADIOBOX`); factory methods on `wx`. Vendored
+  `scriptarray` add-on so the bridge can take/return `array<string>@`
+  for batch operations and `array<int>@` for `wx_list_box.get_selections`.
 - **Phase 1 — basic GUI (in progress):** dialogs
-  (`wx_dialog`, `wx_message_dialog`, `wx_file_dialog`, …); selectors
-  (`wx_choice`, `wx_combo_box`, `wx_list_box`, `wx_radio_box`); range
+  (`wx_dialog`, `wx_message_dialog`, `wx_file_dialog`, …); range
   controls (`wx_slider`, `wx_gauge`, `wx_spin_ctrl`); pickers; books
   (`wx_notebook`, `wx_scrolled_window`, `wx_splitter_window`); menus and
   bars (`wx_menu`, `wx_menu_bar`, `wx_tool_bar`, `wx_status_bar`);
