@@ -358,6 +358,18 @@ dangling pointer the bridge cannot rescue.
   e.g. `wx_window.id` is registered as `get_id() const property` only,
   because `wxWindow::SetId()` after construction breaks any pre-existing
   `Bind`/menu-item dispatch keyed on the original id.
+- **`get_` and `set_` are the *only* property-accessor prefixes
+  AngelScript understands.** `is_xxx() property`, `has_xxx() property`,
+  `can_xxx() property` and similar wx-flavoured spellings are
+  rejected at registration time with `asINVALID_DECLARATION`. CI
+  cannot catch this — only the runtime that actually loads the
+  plugin into NVGT will. If a wx accessor is naturally named
+  `IsEditable`/`HasFocus`/etc., register it as
+  `get_editable() const property` (paired with `set_editable`) for
+  the property form, and *additionally* expose the wx-style spelling
+  as a plain method (`bool is_editable() const`) so callers who
+  prefer the wx idiom still work. Both registrations can point at
+  the same C++ helper.
 - **Property names are derived by stripping `get_`/`set_`.** That
   derived name must be a valid AngelScript identifier and must not
   collide with the type/keyword namespace. In practice:
