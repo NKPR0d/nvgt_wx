@@ -495,10 +495,6 @@ bool wx_sizer_detach_sizer(wxSizer* self, wxSizer* s) {
     return self ? self->Detach(s) : false;
 }
 
-bool wx_sizer_remove_index(wxSizer* self, int index) {
-    return self ? self->Remove(index) : false;
-}
-
 bool wx_sizer_remove_sizer(wxSizer* self, wxSizer* s) {
     return self ? self->Remove(s) : false;
 }

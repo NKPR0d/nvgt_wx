@@ -16,8 +16,7 @@ namespace {
 // Value-type constructors. AngelScript needs a CONSTRUCT behaviour for any
 // non-default constructor we expose. The default constructors are also
 // registered explicitly so AS-side `wx_point p;` resolves consistently
-// across compilers (asGetTypeTraits would mark wxPoint/wxSize/wxRect as
-// asOBJ_APP_CLASS_C, which means construct/destruct must be registered).
+// across compilers.
 // ---------------------------------------------------------------------------
 void wx_point_default_ctor(void* mem) { new (mem) wxPoint(); }
 void wx_point_xy_ctor(int x, int y, void* mem) { new (mem) wxPoint(x, y); }
@@ -51,10 +50,35 @@ void wx_colour_copy_ctor(const wx_colour& other, void* mem) {
 }
 void wx_colour_dtor(void* mem) { static_cast<wx_colour*>(mem)->~wx_colour(); }
 
+// wx_colour has no user-defined operator= (it is a plain POD struct of four
+// uint8_t), so binding the implicitly-generated copy assignment via
+// asMETHODPR works — but only because the compiler emits a real member
+// `wx_colour& operator=(const wx_colour&)` for any class that doesn't
+// delete copy assignment. Using a free wrapper documents this clearly
+// and keeps the binding identical to wx_point/wx_size/wx_rect (which use
+// asMETHODPR on wxPoint::operator= / wxSize::operator= / wxRect::operator=).
+wx_colour& wx_colour_op_assign(wx_colour* self, const wx_colour& other) {
+    *self = other;
+    return *self;
+}
+
 void register_value_types(asIScriptEngine* engine) {
-    // wx_point: constructor is the only non-trivial special member.
+    // The class-trait flags are derived from `asGetTypeTraits<T>()`
+    // rather than spelled out manually. This is the canonical AS pattern
+    // and stays correct under any compiler that honours
+    // std::is_trivially_*: for example, wxPoint has a non-trivial default
+    // constructor but trivial copy/destruct, so it gets just
+    // asOBJ_APP_CLASS_C, while wx_colour has no user-defined special
+    // members and gets bare asOBJ_APP_CLASS. Hand-writing flags risks
+    // over-claiming (which forces unnecessary by-reference passing) or
+    // under-claiming (which may misrepresent the type to AngelScript on
+    // platforms with stricter calling conventions, e.g. SystemV x86_64).
+    // asOBJ_APP_CLASS_ALLINTS is added for wxPoint/wxSize/wxRect because
+    // every member is `int` — this is a class-layout hint AS uses for
+    // value-type passing on non-Windows ABIs. wx_colour also gets
+    // ALLINTS because every member is `uint8_t`.
     engine->RegisterObjectType("wx_point", sizeof(wxPoint),
-        asOBJ_VALUE | asOBJ_APP_CLASS_CK | asOBJ_APP_CLASS_ALLINTS);
+        asOBJ_VALUE | asGetTypeTraits<wxPoint>() | asOBJ_APP_CLASS_ALLINTS);
     engine->RegisterObjectBehaviour("wx_point", asBEHAVE_CONSTRUCT, "void f()",
         asFUNCTION(wx_point_default_ctor), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectBehaviour("wx_point", asBEHAVE_CONSTRUCT, "void f(int x, int y)",
@@ -72,7 +96,7 @@ void register_value_types(asIScriptEngine* engine) {
     // wxSize stores them as x/y. Map AS names to the C++ offsets so the
     // value type is properties-by-position correct.
     engine->RegisterObjectType("wx_size", sizeof(wxSize),
-        asOBJ_VALUE | asOBJ_APP_CLASS_CK | asOBJ_APP_CLASS_ALLINTS);
+        asOBJ_VALUE | asGetTypeTraits<wxSize>() | asOBJ_APP_CLASS_ALLINTS);
     engine->RegisterObjectBehaviour("wx_size", asBEHAVE_CONSTRUCT, "void f()",
         asFUNCTION(wx_size_default_ctor), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectBehaviour("wx_size", asBEHAVE_CONSTRUCT, "void f(int width, int height)",
@@ -89,7 +113,7 @@ void register_value_types(asIScriptEngine* engine) {
     engine->RegisterObjectProperty("wx_size", "int height", offsetof(wxSize, y));
 
     engine->RegisterObjectType("wx_rect", sizeof(wxRect),
-        asOBJ_VALUE | asOBJ_APP_CLASS_CK | asOBJ_APP_CLASS_ALLINTS);
+        asOBJ_VALUE | asGetTypeTraits<wxRect>() | asOBJ_APP_CLASS_ALLINTS);
     engine->RegisterObjectBehaviour("wx_rect", asBEHAVE_CONSTRUCT, "void f()",
         asFUNCTION(wx_rect_default_ctor), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectBehaviour("wx_rect", asBEHAVE_CONSTRUCT, "void f(int x, int y, int width, int height)",
@@ -106,9 +130,11 @@ void register_value_types(asIScriptEngine* engine) {
     engine->RegisterObjectProperty("wx_rect", "int height", offsetof(wxRect, height));
 
     // wx_colour: custom POD; default alpha is 255 in the no-alpha ctor to
-    // match wx defaults.
+    // match wx defaults. asOBJ_POD is asserted alongside asGetTypeTraits
+    // because the struct is layout-trivial — AS can memcpy it across the
+    // boundary safely.
     engine->RegisterObjectType("wx_colour", sizeof(wx_colour),
-        asOBJ_VALUE | asOBJ_POD | asOBJ_APP_CLASS_CK | asOBJ_APP_CLASS_ALLINTS);
+        asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<wx_colour>() | asOBJ_APP_CLASS_ALLINTS);
     engine->RegisterObjectBehaviour("wx_colour", asBEHAVE_CONSTRUCT, "void f()",
         asFUNCTION(wx_colour_default_ctor), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectBehaviour("wx_colour", asBEHAVE_CONSTRUCT, "void f(uint8 r, uint8 g, uint8 b)",
@@ -119,6 +145,14 @@ void register_value_types(asIScriptEngine* engine) {
         asFUNCTION(wx_colour_copy_ctor), asCALL_CDECL_OBJLAST);
     engine->RegisterObjectBehaviour("wx_colour", asBEHAVE_DESTRUCT, "void f()",
         asFUNCTION(wx_colour_dtor), asCALL_CDECL_OBJLAST);
+    // Symmetric with wxPoint/wxSize/wxRect: every value type gets
+    // an explicit opAssign so script authors can rely on the
+    // assignment operator existing on every wx_* value type.
+    // Without this AS still emits memberwise copy for POD types, but
+    // the asymmetry (`wx_point` had it, `wx_colour` did not) is a
+    // footgun for someone doing template-style code generation.
+    engine->RegisterObjectMethod("wx_colour", "wx_colour &opAssign(const wx_colour &in)",
+        asFUNCTION(wx_colour_op_assign), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectProperty("wx_colour", "uint8 r", offsetof(wx_colour, r));
     engine->RegisterObjectProperty("wx_colour", "uint8 g", offsetof(wx_colour, g));
     engine->RegisterObjectProperty("wx_colour", "uint8 b", offsetof(wx_colour, b));
@@ -283,7 +317,6 @@ void register_value_types(asIScriptEngine* engine) {
     engine->RegisterObjectMethod(name, "bool detach(wx_sizer@)", asFUNCTION(wx_sizer_detach_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool detach(int index)", asFUNCTION(wx_sizer_detach_index), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool remove(wx_sizer@)", asFUNCTION(wx_sizer_remove_sizer), asCALL_CDECL_OBJFIRST); \
-    engine->RegisterObjectMethod(name, "bool remove(int index)", asFUNCTION(wx_sizer_remove_index), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool show(wx_window@, bool show = true, bool recursive = false)", asFUNCTION(wx_sizer_show_window), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool show(wx_sizer@, bool show = true, bool recursive = false)", asFUNCTION(wx_sizer_show_sizer), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool show(int index, bool show = true)", asFUNCTION(wx_sizer_show_index), asCALL_CDECL_OBJFIRST); \

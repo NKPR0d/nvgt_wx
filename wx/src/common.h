@@ -106,6 +106,15 @@ void AddRef(void* ptr);
 void Release(void* ptr);
 void CleanupHandlersFor(void* ptr);
 
+// CleanupSizerEntries: walks a wxSizer and its sub-sizers and removes
+// every (wxSizer*, wxSizerItem*) entry the bridge made in g_ref_counts /
+// g_event_handlers. Sizers and sizer items do not fire wxEVT_DESTROY of
+// their own, so without this call their bridge entries become stale the
+// moment wxWidgets destroys the underlying object — see runtime.cpp.
+// Idempotent: erase-on-not-present is a no-op, and re-running on the
+// same sizer is safe.
+void CleanupSizerEntries(wxSizer* sizer);
+
 // ---------------------------------------------------------------------------
 // Script event dispatch (runtime.cpp).
 // ---------------------------------------------------------------------------
@@ -320,7 +329,12 @@ bool wx_sizer_replace_sizer(wxSizer* self, wxSizer* oldsizer, wxSizer* newsizer,
 bool wx_sizer_detach_index(wxSizer* self, int index);
 bool wx_sizer_detach_window(wxSizer* self, wxWindow* win);
 bool wx_sizer_detach_sizer(wxSizer* self, wxSizer* s);
-bool wx_sizer_remove_index(wxSizer* self, int index);
+// Note: wxSizer::Remove(int) is intentionally not exposed — since
+// wxWidgets 3.0 it is functionally identical to Detach(int), and a
+// duplicate `remove(int)` registration is just an API trap. Use
+// `detach(int)` for index-based removal. Only `remove(wx_sizer@)`
+// remains because it has distinct semantics from
+// `detach(wx_sizer@)` (Remove deletes the sub-sizer; Detach does not).
 bool wx_sizer_remove_sizer(wxSizer* self, wxSizer* s);
 void wx_sizer_clear(wxSizer* self, bool delete_windows);
 void wx_sizer_delete_windows(wxSizer* self);

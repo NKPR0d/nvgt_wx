@@ -311,6 +311,33 @@ top-level window the bridge does not own, taking down the entire
 parent's child chain along with it. `EnsureTracked` is in
 `common.h` next to `Track`.
 
+**Sizer / sizer-item lifetime.** `wxSizer` and `wxSizerItem` do **not**
+fire `wxEVT_DESTROY` of their own. To prevent stale entries in
+`g_ref_counts` after wxWidgets tears them down, the runtime calls
+`CleanupSizerEntries(sizer)` from two places (see `runtime.cpp`):
+
+1. `OnObjectDestroyed` (the `wxEVT_DESTROY` callback for windows): when
+   a wxWindow dies and its destructor is about to destroy the sizer
+   it owns via `SetSizer`, the bridge walks the sizer tree and
+   removes every `(wxSizer*, wxSizerItem*)` entry first.
+2. `Release(...)` for a freestanding sizer (`!GetContainingWindow()`):
+   before `delete sizer`, the same walk runs so the items disappear
+   from `g_ref_counts` before their destructor invalidates the
+   pointers.
+
+The walk is recursive through any sub-sizers (`wxSizerItem::GetSizer()`),
+so nested sizer trees are handled too. New code that destroys a sizer
+through some other path (e.g. wrapping a wx call that internally swaps
+sizers) must call `CleanupSizerEntries` before the destruction lands,
+otherwise script-side `wx_sizer_item@` handles will silently start
+pointing at freed memory.
+
+Even with the cleanup, **scripts must not rely on a `wx_sizer_item@`
+outliving the sizer it came from.** A `wx_sizer_item@` borrowed before
+the cleanup is fine; one held across a `sizer.clear()`, a `frame.destroy()`
+of the containing window, or any explicit `replace`/`detach` call is a
+dangling pointer the bridge cannot rescue.
+
 ## Naming and code conventions
 
 - AngelScript-exposed names use **`snake_case`** (`set_title`,
@@ -352,6 +379,28 @@ parent's child chain along with it. `EnsureTracked` is in
   work. Add a one-line comment above the registration explaining why
   `property` is intentionally absent so the next contributor does not
   "fix" it.
+- **Property setters in an overload family must be the only setter
+  marked `property`.** AngelScript's overload resolver is happy to
+  pick the right `set_xxx(...)` based on argument type, but only one
+  of those overloads can carry the `property` keyword — the one that
+  the assignment-form `obj.xxx = ...` will resolve to. Example:
+  `set_size(const wx_size &in size) property` is the property setter
+  used by `obj.size = wx_size(...)`; `set_size(const wx_rect &in
+  rect)` is registered as a regular method without `property` and
+  is callable only as `obj.set_size(rect)`. Adding a second
+  `property`-marked overload (or removing `property` from the
+  intended one) silently breaks every script that relies on the
+  assignment form. Document this next to the registration block when
+  it is non-obvious.
+- **`set_label` mirrors the value into the window's `name`** (for
+  accessibility). The `name` property exists on every wx_window, so
+  scripts that set both should set `name` *after* `label`, otherwise
+  `set_label` clobbers the `name` they just assigned. The mirror is
+  intentional — wx accessibility queries the window name first when
+  no label is available — but the order dependency is non-obvious
+  from the script side. The `set_label_text` variant (which strips
+  `&` mnemonics and is meant for arbitrary user input) does **not**
+  mirror into `name`, deliberately.
 - Strings cross the boundary as `std::string` in UTF-8, converted with
   `wxString::FromUTF8(...)` and `.utf8_str()`. Do not use
   `wxString::FromAscii` or pass `const char*` raw.

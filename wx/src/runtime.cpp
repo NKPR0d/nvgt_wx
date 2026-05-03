@@ -47,6 +47,29 @@ void CleanupHandlersFor(void* ptr) {
     }
 }
 
+// Clean up bridge entries for a wxSizer and every wxSizerItem it owns,
+// recursing into sub-sizers. The wxWidgets destruction chain runs
+// (wxWindow::~wxWindow) -> (wxSizer::~wxSizer) -> (wxSizerItem::~wxSizerItem),
+// but only the wxWindow step fires wxEVT_DESTROY. Without this helper,
+// any AddRef'd sizer or sizer-item entry would be left behind after the
+// underlying object is freed, and a later Release() (or even a stray
+// asMETHOD call through a dangling AS handle) would dereference garbage.
+void CleanupSizerEntries(wxSizer* sizer) {
+    if (!sizer) return;
+    g_ref_counts.erase(sizer);
+    CleanupHandlersFor(sizer);
+    wxSizerItemList& items = sizer->GetChildren();
+    for (auto it = items.begin(); it != items.end(); ++it) {
+        wxSizerItem* item = *it;
+        if (!item) continue;
+        g_ref_counts.erase(item);
+        CleanupHandlersFor(item);
+        if (wxSizer* sub = item->GetSizer()) {
+            CleanupSizerEntries(sub);
+        }
+    }
+}
+
 void AddRef(void* ptr) {
     if (!ptr) return;
     if (g_ref_counts.find(ptr) == g_ref_counts.end()) {
@@ -73,6 +96,10 @@ void Release(void* ptr) {
         else if (wx_obj->IsKindOf(CLASSINFO(wxSizer))) {
             wxSizer* sizer = static_cast<wxSizer*>(wx_obj);
             if (sizer && !sizer->GetContainingWindow()) {
+                // Remove every wxSizerItem entry the bridge holds for
+                // this sizer (and any sub-sizers) before the wxSizer
+                // destructor invalidates them.
+                CleanupSizerEntries(sizer);
                 delete sizer;
             }
         }
@@ -86,6 +113,19 @@ void OnObjectDestroyed(wxWindowDestroyEvent& event) {
     void* ptr = event.GetEventObject();
     CleanupHandlersFor(ptr);
     g_ref_counts.erase(ptr);
+    // wxWindow may carry a sizer (via SetSizer) that wxWidgets is about
+    // to destroy as part of this window's destructor chain. Sizers and
+    // sizer items do not fire wxEVT_DESTROY, so walk the sizer here
+    // while it is still valid and clean up any g_ref_counts entries
+    // we hold for it. wxDynamicCast handles the IsKindOf check and
+    // the cast in one step.
+    if (auto* obj = static_cast<wxObject*>(ptr)) {
+        if (auto* win = wxDynamicCast(obj, wxWindow)) {
+            if (wxSizer* sizer = win->GetSizer()) {
+                CleanupSizerEntries(sizer);
+            }
+        }
+    }
 }
 
 void OnWxEvent(wxEvent& event) {
