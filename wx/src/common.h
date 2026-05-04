@@ -377,6 +377,29 @@ void wx_window_set_window_style(wxWindow* self, int style);
 int wx_window_get_extra_style(wxWindow* self);
 void wx_window_set_extra_style(wxWindow* self, int style);
 
+// Reparent / tab order / paint helpers.
+//
+// Reparent is wrapped because the underlying wx signature takes a
+// wxWindowBase*; while wxWindow inherits from wxWindowBase via single
+// inheritance and the pointer values happen to match in practice,
+// asMETHOD-with-pointer-base-mismatch is documented as undefined in
+// AngelScript so the wrapper makes the upcast explicit.
+//
+// MoveAfterInTabOrder / MoveBeforeInTabOrder are inline-only forwarders
+// to wxWindowBase::DoMoveInTabOrder; the wrappers give the linker a
+// single out-of-line definition (same reasoning as wx_grid_sizer's
+// effective-count wrappers, see AGENTS.md "Things to know") and add a
+// null guard for the `other` argument so a script passing `null` does
+// not crash inside DoMoveInTabOrder.
+//
+// RefreshRect is an inline forwarder around wxWindow::Refresh; the
+// wrapper exposes the wx-side `eraseBackground=true` default through
+// the AS-side signature, same reasoning as wx_window_refresh.
+bool wx_window_reparent(wxWindow* self, wxWindow* new_parent);
+void wx_window_move_after_in_tab_order(wxWindow* self, wxWindow* other);
+void wx_window_move_before_in_tab_order(wxWindow* self, wxWindow* other);
+void wx_window_refresh_rect(wxWindow* self, const wx_rect& rect, bool erase_background);
+
 std::string wx_control_get_label(wxControl* self);
 void wx_control_set_label(wxControl* self, const std::string& label);
 std::string wx_control_get_label_text(wxControl* self);
@@ -571,6 +594,60 @@ wxRadioButton* wx_radio_button_get_last_in_group(wxRadioButton* self);
 wxRadioButton* wx_radio_button_get_next_in_group(wxRadioButton* self);
 wxRadioButton* wx_radio_button_get_previous_in_group(wxRadioButton* self);
 
+// wxButton extras. SetDefault returns the previously-default window
+// in wx, but the AS-side surface only needs the side effect; the
+// previous-default pointer is dropped to keep the binding `void`.
+// Auth-needed accessors are wrapped because they are inline-only in
+// the wx headers (forwarders for DoSetAuthNeeded / DoGetAuthNeeded);
+// asMETHOD on inline-only members can fail to resolve under MSVC's
+// whole-program optimisation, same reasoning as wx_grid_sizer.
+void wx_button_set_default(wxButton* self);
+bool wx_button_get_auth_needed(wxButton* self);
+void wx_button_set_auth_needed(wxButton* self, bool show);
+
+// wxPanel: SetFocusIgnoringChildren is inherited via the
+// wxNavigationEnabled<wxWindow> CRTP mix-in; wrap to keep the
+// asMETHOD binding pointing at a single out-of-line definition.
+void wx_panel_set_focus_ignoring_children(wxPanel* self);
+
+// wxTextCtrl-specific surface beyond the wxTextEntry mix-in.
+//
+// Almost every method here is declared on wxTextAreaBase, which
+// wxTextCtrlBase reaches via multiple inheritance (wxTextCtrlBase
+// : public wxControl, public wxTextAreaBase, public wxTextEntry).
+// asMETHOD on a method only inherited via MI fails to compile under
+// MSVC — same reason wxCommandEvent's payload mixin needs wrappers,
+// see AGENTS.md "asMETHOD does not work … via multiple inheritance".
+// The wrappers below also cover the other cases the bridge wrap-rule
+// identifies:
+//
+//   * SetModified — inline forwarder to MarkDirty / DiscardEdits.
+//   * GetLineLength / XYToPosition / PositionToXY / ShowPosition —
+//     `long` in the wx signature; wrap for LP64/LLP64 portability.
+//     PositionToXY also has `long*` out parameters that need int&
+//     adapters.
+//   * GetLineText — wxString return.
+//   * IsMultiLine / IsSingleLine — inline forwarders around HasFlag.
+//   * LoadFile / SaveFile — inline forwarders to DoLoadFile / DoSaveFile
+//     plus wxString conversion and a default-empty filename.
+//   * EmulateKeyPress — wx signature is `const wxKeyEvent&`; the AS
+//     handle delivers a `wxKeyEvent*`, the wrapper dereferences.
+bool wx_text_control_is_modified(wxTextCtrl* self);
+void wx_text_control_mark_dirty(wxTextCtrl* self);
+void wx_text_control_discard_edits(wxTextCtrl* self);
+void wx_text_control_set_modified(wxTextCtrl* self, bool modified);
+int wx_text_control_get_number_of_lines(wxTextCtrl* self);
+int wx_text_control_get_line_length(wxTextCtrl* self, int line);
+std::string wx_text_control_get_line_text(wxTextCtrl* self, int line);
+int wx_text_control_xy_to_position(wxTextCtrl* self, int x, int y);
+bool wx_text_control_position_to_xy(wxTextCtrl* self, int pos, int& out_x, int& out_y);
+void wx_text_control_show_position(wxTextCtrl* self, int pos);
+bool wx_text_control_is_multi_line(wxTextCtrl* self);
+bool wx_text_control_is_single_line(wxTextCtrl* self);
+bool wx_text_control_load_file(wxTextCtrl* self, const std::string& file, int file_type);
+bool wx_text_control_save_file(wxTextCtrl* self, const std::string& file, int file_type);
+bool wx_text_control_emulate_key_press(wxTextCtrl* self, wxKeyEvent* event);
+
 // ---------------------------------------------------------------------------
 // CScriptArray <-> wxArrayString / wxArrayInt conversion helpers used by
 // every selector control. Live in helpers.cpp; declared here so manager.cpp
@@ -677,6 +754,12 @@ int wx_radio_box_get_column_count(wxRadioBox* self);
 int wx_radio_box_get_row_count(wxRadioBox* self);
 std::string wx_radio_box_get_item_help_text(wxRadioBox* self, int n);
 void wx_radio_box_set_item_help_text(wxRadioBox* self, int n, const std::string& s);
+// wxRadioBox::GetItemToolTip returns wxToolTip*, but exposing wxToolTip
+// as a separate ref type would only let scripts read its text. The
+// wrapper unwraps the tooltip text directly and returns "" when the
+// item has no tooltip set.
+std::string wx_radio_box_get_item_tool_tip(wxRadioBox* self, int n);
+void wx_radio_box_set_item_tool_tip(wxRadioBox* self, int n, const std::string& s);
 int wx_radio_box_get_item_from_point(wxRadioBox* self, const wx_point& pt);
 int wx_radio_box_get_next_item(wxRadioBox* self, int item, int direction, int style);
 

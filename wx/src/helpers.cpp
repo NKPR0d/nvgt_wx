@@ -365,6 +365,33 @@ void wx_window_set_font(wxWindow* self, const wxFont& font) {
 }
 
 // ---------------------------------------------------------------------------
+// wxWindow gap-fill: parent / tab order / paint. The remaining wxWindow
+// additions (IsTopLevel, IsBeingDeleted, AcceptsFocus*, SetCanFocus,
+// CenterOnParent, WarpPointer, GetEffectiveMinSize, IsDoubleBuffered,
+// SetDoubleBuffered, RegisterHotKey, UnregisterHotKey) bind directly
+// through asMETHOD in register.cpp — they have compatible signatures
+// and out-of-line vtable slots, so a wrapper would be empty pass-through.
+// ---------------------------------------------------------------------------
+bool wx_window_reparent(wxWindow* self, wxWindow* new_parent) {
+    if (!self) return false;
+    return self->Reparent(new_parent);
+}
+
+void wx_window_move_after_in_tab_order(wxWindow* self, wxWindow* other) {
+    if (!self || !other) return;
+    self->MoveAfterInTabOrder(other);
+}
+
+void wx_window_move_before_in_tab_order(wxWindow* self, wxWindow* other) {
+    if (!self || !other) return;
+    self->MoveBeforeInTabOrder(other);
+}
+
+void wx_window_refresh_rect(wxWindow* self, const wx_rect& rect, bool erase_background) {
+    if (self) self->RefreshRect(rect, erase_background);
+}
+
+// ---------------------------------------------------------------------------
 // wxControl.
 // ---------------------------------------------------------------------------
 std::string wx_control_get_label(wxControl* self) {
@@ -1615,6 +1642,20 @@ void wx_radio_box_set_item_help_text(wxRadioBox* self, int n, const std::string&
     self->SetItemHelpText(static_cast<unsigned>(n), wxString::FromUTF8(s.c_str()));
 }
 
+// Unwrap the wxToolTip* into a plain UTF-8 string. Returns "" both when
+// the radio-box / index is invalid and when the item has no tooltip
+// configured (wxRadioBox::GetItemToolTip returns nullptr in that case).
+std::string wx_radio_box_get_item_tool_tip(wxRadioBox* self, int n) {
+    if (!self || n < 0 || static_cast<unsigned>(n) >= self->GetCount()) return "";
+    wxToolTip* tip = self->GetItemToolTip(static_cast<unsigned>(n));
+    return tip ? std::string(tip->GetTip().utf8_str()) : "";
+}
+
+void wx_radio_box_set_item_tool_tip(wxRadioBox* self, int n, const std::string& s) {
+    if (!self || n < 0 || static_cast<unsigned>(n) >= self->GetCount()) return;
+    self->SetItemToolTip(static_cast<unsigned>(n), wxString::FromUTF8(s.c_str()));
+}
+
 int wx_radio_box_get_item_from_point(wxRadioBox* self, const wx_point& pt) {
     return self ? self->GetItemFromPoint(pt) : wxNOT_FOUND;
 }
@@ -1622,4 +1663,112 @@ int wx_radio_box_get_item_from_point(wxRadioBox* self, const wx_point& pt) {
 int wx_radio_box_get_next_item(wxRadioBox* self, int item, int direction, int style) {
     if (!self) return wxNOT_FOUND;
     return self->GetNextItem(item, static_cast<wxDirection>(direction), static_cast<long>(style));
+}
+
+// ---------------------------------------------------------------------------
+// wxButton extras. SetDefault returns the previously-default wxWindow*
+// in wx; the AS surface drops it (the script just wants the side
+// effect). SetAuthNeeded / GetAuthNeeded are inline-only forwarders to
+// DoSetAuthNeeded / DoGetAuthNeeded — wrapped per AGENTS.md "inline-only
+// methods" rule so the linker has a single out-of-line target.
+// ---------------------------------------------------------------------------
+void wx_button_set_default(wxButton* self) {
+    if (self) self->SetDefault();
+}
+
+bool wx_button_get_auth_needed(wxButton* self) {
+    return self ? self->GetAuthNeeded() : false;
+}
+
+void wx_button_set_auth_needed(wxButton* self, bool show) {
+    if (self) self->SetAuthNeeded(show);
+}
+
+// ---------------------------------------------------------------------------
+// wxPanel: SetFocusIgnoringChildren is inherited via the
+// wxNavigationEnabled<wxWindow> CRTP base and is inline-only in the
+// header. Wrap so register.cpp has a single out-of-line target.
+// ---------------------------------------------------------------------------
+void wx_panel_set_focus_ignoring_children(wxPanel* self) {
+    if (self) self->SetFocusIgnoringChildren();
+}
+
+// ---------------------------------------------------------------------------
+// wxTextCtrl gap-fill (see common.h header comment for the wrap-rule
+// classification — almost everything below is on wxTextAreaBase, an
+// MI base of wxTextCtrlBase, so wrapping is mandatory).
+// ---------------------------------------------------------------------------
+bool wx_text_control_is_modified(wxTextCtrl* self) {
+    return self ? self->IsModified() : false;
+}
+
+void wx_text_control_mark_dirty(wxTextCtrl* self) {
+    if (self) self->MarkDirty();
+}
+
+void wx_text_control_discard_edits(wxTextCtrl* self) {
+    if (self) self->DiscardEdits();
+}
+
+void wx_text_control_set_modified(wxTextCtrl* self, bool modified) {
+    if (self) self->SetModified(modified);
+}
+
+int wx_text_control_get_number_of_lines(wxTextCtrl* self) {
+    return self ? self->GetNumberOfLines() : 0;
+}
+
+int wx_text_control_get_line_length(wxTextCtrl* self, int line) {
+    if (!self) return -1;
+    return static_cast<int>(self->GetLineLength(static_cast<long>(line)));
+}
+
+std::string wx_text_control_get_line_text(wxTextCtrl* self, int line) {
+    if (!self) return "";
+    return std::string(self->GetLineText(static_cast<long>(line)).utf8_str());
+}
+
+int wx_text_control_xy_to_position(wxTextCtrl* self, int x, int y) {
+    if (!self) return -1;
+    return static_cast<int>(self->XYToPosition(static_cast<long>(x), static_cast<long>(y)));
+}
+
+bool wx_text_control_position_to_xy(wxTextCtrl* self, int pos, int& out_x, int& out_y) {
+    out_x = 0;
+    out_y = 0;
+    if (!self) return false;
+    long lx = 0, ly = 0;
+    bool ok = self->PositionToXY(static_cast<long>(pos), &lx, &ly);
+    out_x = static_cast<int>(lx);
+    out_y = static_cast<int>(ly);
+    return ok;
+}
+
+void wx_text_control_show_position(wxTextCtrl* self, int pos) {
+    if (self) self->ShowPosition(static_cast<long>(pos));
+}
+
+bool wx_text_control_is_multi_line(wxTextCtrl* self) {
+    return self ? self->IsMultiLine() : false;
+}
+
+bool wx_text_control_is_single_line(wxTextCtrl* self) {
+    return self ? self->IsSingleLine() : false;
+}
+
+bool wx_text_control_load_file(wxTextCtrl* self, const std::string& file, int file_type) {
+    if (!self) return false;
+    return self->LoadFile(wxString::FromUTF8(file.c_str()), file_type);
+}
+
+bool wx_text_control_save_file(wxTextCtrl* self, const std::string& file, int file_type) {
+    if (!self) return false;
+    // wx's SaveFile uses an empty string to mean "reuse the filename
+    // from the most recent LoadFile". Pass through verbatim.
+    return self->SaveFile(wxString::FromUTF8(file.c_str()), file_type);
+}
+
+bool wx_text_control_emulate_key_press(wxTextCtrl* self, wxKeyEvent* event) {
+    if (!self || !event) return false;
+    return self->EmulateKeyPress(*event);
 }
