@@ -48,13 +48,17 @@
 #include "../../../src/nvgt_plugin.h"
 
 // CScriptArray (the AngelScript add-on registered by NVGT as `array<T>`)
-// is vendored locally as wx/src/scriptarray.{h,cpp}. The plugin needs
-// the class definition both for reading parameters of type `string[]@`
-// passed in by scripts and for constructing return values like
-// `int[]@` from wxArrayInt. AGENTS.md documents why scriptarray.cpp
-// has to be compiled into the plugin even though the array type is
-// already registered by NVGT.
-#include "scriptarray.h"
+// is consumed from NVGT's own ASAddon tree (`#ASAddon/include/scriptarray.h`)
+// rather than vendored. The implementation is compiled in via the
+// `#ASAddon/plugin/scriptarray.cpp` wrapper added to `wx/_SConscript`'s
+// source list. The plugin needs the class definition both for reading
+// parameters of type `string[]@` passed in by scripts and for constructing
+// return values like `int[]@` from wxArrayInt. NVGT registers `array<T>`
+// once on its engine; the plugin must NOT re-register it. See
+// AGENTS.md "scriptarray (consumed from ASAddon)" for why the
+// implementation still has to be compiled into the plugin DLL even
+// though the type is already registered upstream.
+#include <scriptarray.h>
 
 // ---------------------------------------------------------------------------
 // Value types exposed to AngelScript.

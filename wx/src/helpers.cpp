@@ -1255,10 +1255,10 @@ wxFont wx_font_get_base_font(const wxFont* self) {
 // CScriptArray <-> wxArrayString / wxArrayInt conversion helpers used by
 // every selector control. CScriptArray is the AngelScript add-on that
 // backs the `array<T>` template; NVGT registers it once on its engine,
-// the plugin links the same source (wx/src/scriptarray.cpp) so the
-// `class CScriptArray` definition is visible inside this translation
-// unit. See AGENTS.md "scriptarray vendoring" for the binary-compat
-// rationale.
+// the plugin links the same source (built from NVGT's
+// `#ASAddon/plugin/scriptarray.cpp` wrapper) so the `class CScriptArray`
+// definition is visible inside this translation unit. See AGENTS.md
+// "scriptarray (consumed from ASAddon)" for the binary-compat rationale.
 // ---------------------------------------------------------------------------
 wxArrayString as_array_to_wx_strings(CScriptArray* items) {
     wxArrayString out;
