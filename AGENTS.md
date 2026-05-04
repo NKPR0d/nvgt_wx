@@ -588,6 +588,47 @@ NVGT-specific gotchas:
   `DllMain` on `DLL_PROCESS_DETACH` — after every wx object the
   bridge handed out has been released. See *WxManager* above for why
   pairing the cleanup with `~WxManager()` would be wrong.
+- **Do not write a wrapper unless the bridge needs one.** The default
+  for any new method binding is `asMETHOD(wxFoo, BarBaz)` registered
+  directly through `engine->RegisterObjectMethod`. A free-function
+  wrapper in `helpers.cpp` is only justified when one of the rules
+  below makes the direct binding incorrect, fragile, or impossible:
+    1. **C++ signature is incompatible with the AS-side surface.**
+       The wx method takes a base-class pointer the bridge doesn't
+       vend (`wxWindow::Reparent(wxWindowBase*)`), takes a const
+       reference where the AS handle is a pointer
+       (`wxTextCtrl::EmulateKeyPress(const wxKeyEvent&)`), or returns
+       a value the AS-side method should drop (`wxButton::SetDefault`
+       returns the previous default `wxWindow*` but scripts only
+       want the side effect).
+    2. **`long` appears in the parameter list or return type.** Always
+       wrap, see the dedicated bullet below — `int`-vs-`long` width
+       differs across LLP64 (MSW) and LP64 (Linux/macOS).
+    3. **`wxString` ↔ `std::string` conversion.** AngelScript only
+       knows `string`; the wrapper does the UTF-8 round-trip.
+    4. **The C++ method has a default-valued parameter** that the
+       AS-side surface should also default. `asMETHOD` does not
+       propagate C++ defaults — see the next bullet for why this is
+       a footgun, especially with pointer defaults.
+    5. **The C++ method is `inline`-only in the header**, with no
+       out-of-line definition the linker can grab. Direct `asMETHOD`
+       on such a method has been observed to fail under MSVC's
+       whole-program optimisation; the wrapper gives the linker a
+       single out-of-line target. Examples already in the bridge:
+       `wxGridSizer::GetEffectiveColsCount`, `wxGridSizer::CalcRowsCols`,
+       `wxWindow::MoveAfterInTabOrder` (forwards to `DoMoveInTabOrder`),
+       `wxButton::SetAuthNeeded` (forwards to `DoSetAuthNeeded`).
+    6. **A property setter** with a wx-side `bool` return that has to
+       be dropped to `void`, or a wx getter / setter wired through the
+       `property` syntax that needs reshaping (see the property-setter
+       bullet below).
+  A wrapper that *only* adds a `if (!self) return ...;` guard is **not
+  justified** — the existing direct `asMETHOD` bindings on
+  `wxWindow::Show`, `IsShown`, `IsEnabled`, `HasFocus`, … do not
+  null-check, and AngelScript callers already crash predictably when
+  invoking through a null handle. The bridge's null-checks in helpers
+  exist as a side-effect of wrappers needed for other reasons; they
+  are not a reason to wrap.
 - **`asMETHOD` does not propagate C++ default arguments.** If the
   underlying C++ method has defaulted parameters and the AngelScript
   signature omits them, the C++ function still expects all parameters
@@ -751,7 +792,14 @@ Style bitmasks are split into per-control enums:
 | `wx_button_style`        | `WX_BU_*`                           |
 | `wx_check_box_style`     | `WX_CHK_2STATE`, `WX_CHK_3STATE`,   |
 |                          | `WX_CHK_ALLOW_3RD_STATE_FOR_USER`   |
+| `wx_static_text_style`   | `WX_ALIGN_LEFT`, `WX_ALIGN_RIGHT`,  |
+|                          | `WX_ALIGN_CENTRE_HORIZONTAL`,       |
+|                          | `WX_ST_NO_AUTORESIZE`,              |
+|                          | `WX_ST_ELLIPSIZE_*`                 |
 | `wx_text_ctrl_style`     | `WX_TE_*`                           |
+| `wx_text_file_type`      | `WX_TEXT_TYPE_ANY` (selector for    |
+|                          | `wx_text_control.load_file` /       |
+|                          | `save_file`, not a bit flag)        |
 | `wx_radio_button_style`  | `WX_RB_GROUP`, `WX_RB_SINGLE`       |
 | `wx_choice_style`        | `WX_CB_SORT`                        |
 | `wx_combo_box_style`     | `WX_CB_SIMPLE`, `WX_CB_DROPDOWN`,   |
@@ -813,10 +861,19 @@ the ints natively and casts inside.
 
 - **`wxWindow`** — geometry/colour as value-type properties; `font`
   property (`wx_font` value type, get/set); show / hide / enable /
-  focus / layout / centre / fit / refresh / scroll / raise / lower /
-  freeze / thaw / capture / drag-accept / dpi-scale / parent /
-  grandparent / sizer / window-style / extra-style / tooltip / name /
-  help-text / text-extent / client-screen conversions.
+  focus / layout / centre / centre-on-parent / fit / refresh /
+  refresh-rect / scroll / raise / lower / freeze / thaw / capture /
+  drag-accept / dpi-scale / parent / grandparent / sizer / window-style
+  / extra-style / tooltip / name / help-text / text-extent /
+  client-screen conversions / reparent / move-{after,before}-in-tab-order
+  / is-{top-level,being-deleted,double-buffered,modal,frozen} /
+  set-double-buffered / accepts-focus / accepts-focus-from-keyboard /
+  can-accept-focus / set-can-focus / warp-pointer /
+  effective-min-size / register-hot-key / unregister-hot-key.
+  `register_hot_key` / `unregister_hot_key` only do real work on MSW
+  (the wx-side base implementation returns false on every other port);
+  the bridge exposes them on every platform so script code stays
+  portable.
   Not exposed yet: hit-testing, child-window enumeration, accelerator
   tables, validators, layout direction, transparency.
 - **`wxTopLevelWindow`** — title / full-screen / maximize / iconize /
@@ -875,12 +932,21 @@ the ints natively and casts inside.
   read-only `static_box` property (returns `wx_static_box@`,
   `EnsureTracked`-attached so the destroy hook is wired the first time
   the bridge sees the box).
-- **Concrete widgets** — `wx_frame`, `wx_panel`, `wx_button`,
-  `wx_check_box` (`get_value` / `set_value` / `Get3StateValue` /
-  `Set3StateValue` / `is_3rd_state_allowed_for_user` / `is_3state` /
-  `is_checked`), `wx_static_text` (`wrap`), `wx_text_control` (full
-  `wxTextEntry` surface), `wx_radio_button` (`get_value` / `set_value`
-  / first/last/next/previous-in-group).
+- **Concrete widgets** — `wx_frame`, `wx_panel` (plus
+  `set_focus_ignoring_children`), `wx_button` (plus `set_default`,
+  `auth_needed` property — the auth-needed UAC shield is MSW-only,
+  the wx-side accessors no-op elsewhere), `wx_check_box` (`get_value`
+  / `set_value` / `Get3StateValue` / `Set3StateValue` /
+  `is_3rd_state_allowed_for_user` / `is_3state` / `is_checked`),
+  `wx_static_text` (`wrap`), `wx_text_control` (the full `wxTextEntry`
+  surface plus the wxTextCtrl extras: `is_modified`, `mark_dirty`,
+  `discard_edits`, `set_modified(bool)`, `number_of_lines` property,
+  `get_line_length(int)`, `get_line_text(int)`, `xy_to_position(int,
+  int)`, `position_to_xy(int, int &out, int &out)`, `show_position(int)`,
+  `is_multi_line`, `is_single_line`, `load_file` / `save_file` with
+  `wx_text_file_type` selector, `emulate_key_press(wx_key_event@)`),
+  `wx_radio_button` (`get_value` / `set_value` /
+  first/last/next/previous-in-group).
 - **`wxItemContainer` mix-in** (consumed by `wx_choice`, `wx_combo_box`,
   `wx_list_box`) — read surface: `count` / `is_empty` / `get_string` /
   `set_string` / `find_string` / `selection` / `select` /
@@ -922,8 +988,11 @@ the ints natively and casts inside.
   the radiobox-specific per-item state accessors (`enable_item` /
   `show_item` / `is_item_enabled` / `is_item_shown`), layout
   accessors (`column_count` / `row_count`), per-item help text
-  (`get_item_help_text` / `set_item_help_text`), and the navigation
-  helpers `get_item_from_point(wx_point)` /
+  (`get_item_help_text` / `set_item_help_text`), per-item tooltip
+  (`get_item_tool_tip` / `set_item_tool_tip` — return / accept plain
+  strings; the underlying `wxToolTip*` is unwrapped, empty string
+  signals "no tooltip configured" or "invalid index"), and the
+  navigation helpers `get_item_from_point(wx_point)` /
   `get_next_item(int, wx_direction, int)`. No mutators (Append /
   Insert / Clear / Delete) — wxRadioBox freezes its set of buttons
   at construction.
@@ -935,7 +1004,15 @@ the ints natively and casts inside.
   `WX_EVT_COMBOBOX_DROPDOWN`, `WX_EVT_COMBOBOX_CLOSEUP`,
   `WX_EVT_LISTBOX`, `WX_EVT_LISTBOX_DCLICK`, `WX_EVT_RADIOBOX`. The
   combo-box also fires the existing `WX_EVT_TEXT` /
-  `WX_EVT_TEXT_ENTER` from the text-entry side.
+  `WX_EVT_TEXT_ENTER` from the text-entry side. Window-level event
+  types: `WX_EVT_MOVE`, `WX_EVT_SHOW`, `WX_EVT_DPI_CHANGED`,
+  `WX_EVT_DROP_FILES`, `WX_EVT_HOTKEY`, `WX_EVT_END_SESSION`,
+  `WX_EVT_QUERY_END_SESSION` (the session-end pair fires only on the
+  application's top window during OS shutdown, the move/show pair
+  fires on every window that is repositioned or whose visibility
+  toggles, drop-files fires when `drag_accept_files(true)` was called
+  earlier on the same window, and hotkey is the MSW-only delivery
+  side of `register_hot_key`).
 - **`wxFont`** — exposed as the `wx_font` value type. Default + full
   ctor (size / family / style / weight / underlined / face_name) +
   copy ctor + `opAssign`. Properties: `point_size`, `pixel_size`,

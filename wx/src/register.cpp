@@ -462,7 +462,24 @@ void register_value_types(asIScriptEngine* engine) {
     engine->RegisterObjectMethod(name, "int get_extra_style() const property", asFUNCTION(wx_window_get_extra_style), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "void set_extra_style(int style) property", asFUNCTION(wx_window_set_extra_style), asCALL_CDECL_OBJFIRST); \
     engine->RegisterObjectMethod(name, "bool is_shown() const", asMETHOD(wxWindow, IsShown), asCALL_THISCALL); \
-    engine->RegisterObjectMethod(name, "bool is_enabled() const", asMETHOD(wxWindow, IsEnabled), asCALL_THISCALL);
+    engine->RegisterObjectMethod(name, "bool is_enabled() const", asMETHOD(wxWindow, IsEnabled), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool is_top_level() const", asMETHOD(wxWindow, IsTopLevel), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool is_being_deleted() const", asMETHOD(wxWindow, IsBeingDeleted), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool is_double_buffered() const", asMETHOD(wxWindow, IsDoubleBuffered), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void set_double_buffered(bool on)", asMETHOD(wxWindow, SetDoubleBuffered), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool accepts_focus() const", asMETHOD(wxWindow, AcceptsFocus), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool accepts_focus_from_keyboard() const", asMETHOD(wxWindow, AcceptsFocusFromKeyboard), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool can_accept_focus() const", asMETHOD(wxWindow, CanAcceptFocus), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void set_can_focus(bool can_focus)", asMETHOD(wxWindow, SetCanFocus), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void center_on_parent(int direction = WX_BOTH)", asMETHOD(wxWindow, CenterOnParent), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "void warp_pointer(int x, int y)", asMETHOD(wxWindow, WarpPointer), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "wx_size get_effective_min_size() const property", asMETHOD(wxWindow, GetEffectiveMinSize), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool reparent(wx_window@ new_parent)", asFUNCTION(wx_window_reparent), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void move_after_in_tab_order(wx_window@ other)", asFUNCTION(wx_window_move_after_in_tab_order), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void move_before_in_tab_order(wx_window@ other)", asFUNCTION(wx_window_move_before_in_tab_order), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "void refresh_rect(const wx_rect &in rect, bool erase_background = true)", asFUNCTION(wx_window_refresh_rect), asCALL_CDECL_OBJFIRST); \
+    engine->RegisterObjectMethod(name, "bool register_hot_key(int hotkey_id, int modifiers, int key_code)", asMETHOD(wxWindow, RegisterHotKey), asCALL_THISCALL); \
+    engine->RegisterObjectMethod(name, "bool unregister_hot_key(int hotkey_id)", asMETHOD(wxWindow, UnregisterHotKey), asCALL_THISCALL);
 
 // ---------------------------------------------------------------------------
 // REG_TLW_METHODS — wxTopLevelWindow surface (frame/dialog/...).
@@ -930,6 +947,13 @@ void register_all_types(asIScriptEngine* engine) {
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_COMBOBOX", wxEVT_COMBOBOX);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_COMBOBOX_DROPDOWN", wxEVT_COMBOBOX_DROPDOWN);
     engine->RegisterEnumValue("wx_event_type", "WX_EVT_COMBOBOX_CLOSEUP", wxEVT_COMBOBOX_CLOSEUP);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_MOVE", wxEVT_MOVE);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_SHOW", wxEVT_SHOW);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_DPI_CHANGED", wxEVT_DPI_CHANGED);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_DROP_FILES", wxEVT_DROP_FILES);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_HOTKEY", wxEVT_HOTKEY);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_END_SESSION", wxEVT_END_SESSION);
+    engine->RegisterEnumValue("wx_event_type", "WX_EVT_QUERY_END_SESSION", wxEVT_QUERY_END_SESSION);
 
     // Per-control style enums. The previous wx_style umbrella mixed
     // bitmasks that overlap across control families (e.g. WX_TE_LEFT
@@ -983,6 +1007,23 @@ void register_all_types(asIScriptEngine* engine) {
     engine->RegisterEnumValue("wx_check_box_style", "WX_CHK_2STATE", wxCHK_2STATE);
     engine->RegisterEnumValue("wx_check_box_style", "WX_CHK_3STATE", wxCHK_3STATE);
     engine->RegisterEnumValue("wx_check_box_style", "WX_CHK_ALLOW_3RD_STATE_FOR_USER", wxCHK_ALLOW_3RD_STATE_FOR_USER);
+
+    engine->RegisterEnum("wx_static_text_style");
+    engine->RegisterEnumValue("wx_static_text_style", "WX_ALIGN_LEFT", wxALIGN_LEFT);
+    engine->RegisterEnumValue("wx_static_text_style", "WX_ALIGN_RIGHT", wxALIGN_RIGHT);
+    engine->RegisterEnumValue("wx_static_text_style", "WX_ALIGN_CENTRE_HORIZONTAL", wxALIGN_CENTRE_HORIZONTAL);
+    engine->RegisterEnumValue("wx_static_text_style", "WX_ST_NO_AUTORESIZE", wxST_NO_AUTORESIZE);
+    engine->RegisterEnumValue("wx_static_text_style", "WX_ST_ELLIPSIZE_START", wxST_ELLIPSIZE_START);
+    engine->RegisterEnumValue("wx_static_text_style", "WX_ST_ELLIPSIZE_MIDDLE", wxST_ELLIPSIZE_MIDDLE);
+    engine->RegisterEnumValue("wx_static_text_style", "WX_ST_ELLIPSIZE_END", wxST_ELLIPSIZE_END);
+
+    // wxTextCtrl::LoadFile / SaveFile file_type constants. These live
+    // outside any wx_* style enum because they are not bit flags — they
+    // are mutually-exclusive format selectors. wxTEXT_TYPE_ANY (= 0) is
+    // the only meaningful value the upstream API currently exposes; the
+    // enum is split out so future format additions land in one place.
+    engine->RegisterEnum("wx_text_file_type");
+    engine->RegisterEnumValue("wx_text_file_type", "WX_TEXT_TYPE_ANY", wxTEXT_TYPE_ANY);
 
     engine->RegisterEnum("wx_text_ctrl_style");
     engine->RegisterEnumValue("wx_text_ctrl_style", "WX_TE_MULTILINE", wxTE_MULTILINE);
@@ -1200,7 +1241,15 @@ void register_all_types(asIScriptEngine* engine) {
 
     REGISTER_WX_TLW("wx_frame", wxFrame);
     REGISTER_WX_WINDOW("wx_panel", wxPanel);
+    engine->RegisterObjectMethod("wx_panel", "void set_focus_ignoring_children()", asFUNCTION(wx_panel_set_focus_ignoring_children), asCALL_CDECL_OBJFIRST);
     REGISTER_WX_CONTROL("wx_button", wxButton);
+    // SetDefault makes the button respond to Enter inside its parent
+    // top-level window. The wx-side return value (the previously-default
+    // wxWindow*) is dropped — scripts that need to swap defaults can
+    // hold on to a handle to the previous one themselves.
+    engine->RegisterObjectMethod("wx_button", "void set_default()", asFUNCTION(wx_button_set_default), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_button", "bool get_auth_needed() const property", asFUNCTION(wx_button_get_auth_needed), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_button", "void set_auth_needed(bool show) property", asFUNCTION(wx_button_set_auth_needed), asCALL_CDECL_OBJFIRST);
     REGISTER_WX_CONTROL("wx_check_box", wxCheckBox);
     engine->RegisterObjectMethod("wx_check_box", "bool get_value() const property", asMETHOD(wxCheckBox, GetValue), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_check_box", "void set_value(bool value) property", asMETHOD(wxCheckBox, SetValue), asCALL_THISCALL);
@@ -1217,6 +1266,26 @@ void register_all_types(asIScriptEngine* engine) {
     REGISTER_WX_CONTROL("wx_text_control", wxTextCtrl);
     engine->RegisterObjectMethod("wx_text_control", "wx_text_entry@ opImplCast()", asFUNCTION(to_text_entry_as_win<wxTextCtrl>), asCALL_CDECL_OBJFIRST);
     REG_TEXT_ENTRY_METHODS("wx_text_control");
+    // wxTextCtrl-specific surface beyond the wxTextEntry mix-in.
+    // wxTextCtrlBase reaches most of these through wxTextAreaBase via
+    // multiple inheritance, so they are wrapped per AGENTS.md "asMETHOD
+    // does not work … via multiple inheritance" — same workaround as
+    // the wxCommandEvent payload-mixin family.
+    engine->RegisterObjectMethod("wx_text_control", "bool is_modified() const", asFUNCTION(wx_text_control_is_modified), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_control", "void mark_dirty()", asFUNCTION(wx_text_control_mark_dirty), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_control", "void discard_edits()", asFUNCTION(wx_text_control_discard_edits), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_control", "void set_modified(bool modified)", asFUNCTION(wx_text_control_set_modified), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_control", "int get_number_of_lines() const property", asFUNCTION(wx_text_control_get_number_of_lines), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_control", "int get_line_length(int line) const", asFUNCTION(wx_text_control_get_line_length), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_control", "string get_line_text(int line) const", asFUNCTION(wx_text_control_get_line_text), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_control", "int xy_to_position(int x, int y) const", asFUNCTION(wx_text_control_xy_to_position), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_control", "bool position_to_xy(int pos, int &out x, int &out y) const", asFUNCTION(wx_text_control_position_to_xy), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_control", "void show_position(int pos)", asFUNCTION(wx_text_control_show_position), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_control", "bool is_multi_line() const", asFUNCTION(wx_text_control_is_multi_line), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_control", "bool is_single_line() const", asFUNCTION(wx_text_control_is_single_line), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_control", "bool load_file(const string &in file, int file_type = WX_TEXT_TYPE_ANY)", asFUNCTION(wx_text_control_load_file), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_control", "bool save_file(const string &in file = \"\", int file_type = WX_TEXT_TYPE_ANY)", asFUNCTION(wx_text_control_save_file), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_text_control", "bool emulate_key_press(wx_key_event@ event)", asFUNCTION(wx_text_control_emulate_key_press), asCALL_CDECL_OBJFIRST);
     REGISTER_WX_CONTROL("wx_radio_button", wxRadioButton);
     engine->RegisterObjectMethod("wx_radio_button", "bool get_value() const property", asMETHOD(wxRadioButton, GetValue), asCALL_THISCALL);
     engine->RegisterObjectMethod("wx_radio_button", "void set_value(bool value) property", asMETHOD(wxRadioButton, SetValue), asCALL_THISCALL);
@@ -1315,6 +1384,11 @@ void register_all_types(asIScriptEngine* engine) {
     engine->RegisterObjectMethod("wx_radio_box", "int get_row_count() const property", asFUNCTION(wx_radio_box_get_row_count), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_radio_box", "string get_item_help_text(int n) const", asFUNCTION(wx_radio_box_get_item_help_text), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_radio_box", "void set_item_help_text(int n, const string &in s)", asFUNCTION(wx_radio_box_set_item_help_text), asCALL_CDECL_OBJFIRST);
+    // get_item_tool_tip returns a plain string (wxToolTip* itself is not
+    // exposed); empty string both for "no tooltip set" and "invalid index"
+    // — symmetric with get_item_help_text above.
+    engine->RegisterObjectMethod("wx_radio_box", "string get_item_tool_tip(int n) const", asFUNCTION(wx_radio_box_get_item_tool_tip), asCALL_CDECL_OBJFIRST);
+    engine->RegisterObjectMethod("wx_radio_box", "void set_item_tool_tip(int n, const string &in s)", asFUNCTION(wx_radio_box_set_item_tool_tip), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_radio_box", "int get_item_from_point(const wx_point &in pt) const", asFUNCTION(wx_radio_box_get_item_from_point), asCALL_CDECL_OBJFIRST);
     engine->RegisterObjectMethod("wx_radio_box", "int get_next_item(int item, wx_direction direction, int style) const", asFUNCTION(wx_radio_box_get_next_item), asCALL_CDECL_OBJFIRST);
 
