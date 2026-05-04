@@ -25,13 +25,21 @@ jobs:
         # include paths "../../src/nvgt_plugin.h" (in wx.cpp) and
         # "../../../src/nvgt_plugin.h" (in src/common.h) only resolve under
         # that layout. Mirror it inside the runner workspace and drop in
-        # nvgt_plugin.h plus angelscript.h fetched from upstream.
-        # (We do NOT vendor those headers into this repo: they belong to NVGT
-        # and AngelScript, and pinning them here would silently rot.)
+        # nvgt_plugin.h plus angelscript.h fetched from upstream. The
+        # `array<T>` add-on (`scriptarray.{h,cpp}` plus the
+        # `ASAddon/plugin/scriptarray.cpp` wrapper that defines
+        # `NVGT_PLUGIN_INCLUDE` before pulling in the implementation) is
+        # likewise fetched from NVGT — building under NVGT in-tree this
+        # comes from `#ASAddon/{include,src,plugin}/`, see
+        # `wx/_SConscript`. We do NOT vendor any of these headers/sources
+        # into this repo: they belong to NVGT / AngelScript, and pinning
+        # them here would silently rot.
         run: |
           $ErrorActionPreference = 'Stop'
 
-          New-Item -ItemType Directory -Force -Path src, plugin\wx, as_include | Out-Null
+          New-Item -ItemType Directory -Force -Path `
+            src, plugin\wx, as_include, `
+            ASAddon\include, ASAddon\src, ASAddon\plugin | Out-Null
           Get-ChildItem -Path nvgt_wx_src\wx -Force | Move-Item -Destination plugin\wx
 
           Invoke-WebRequest -UseBasicParsing `
@@ -45,6 +53,19 @@ jobs:
             -Uri 'https://raw.githubusercontent.com/codecat/angelscript-mirror/master/sdk/angelscript/include/angelscript.h' `
             -OutFile 'as_include/angelscript.h'
 
+          # CScriptArray add-on. The wrapper file pulls in the
+          # implementation via a relative path (`../src/scriptarray.cpp`),
+          # so the directory layout must match upstream.
+          Invoke-WebRequest -UseBasicParsing `
+            -Uri 'https://raw.githubusercontent.com/samtupy/nvgt/main/ASAddon/include/scriptarray.h' `
+            -OutFile 'ASAddon/include/scriptarray.h'
+          Invoke-WebRequest -UseBasicParsing `
+            -Uri 'https://raw.githubusercontent.com/samtupy/nvgt/main/ASAddon/src/scriptarray.cpp' `
+            -OutFile 'ASAddon/src/scriptarray.cpp'
+          Invoke-WebRequest -UseBasicParsing `
+            -Uri 'https://raw.githubusercontent.com/samtupy/nvgt/main/ASAddon/plugin/scriptarray.cpp' `
+            -OutFile 'ASAddon/plugin/scriptarray.cpp'
+
       - name: Configure MSVC environment (x64)
         uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -55,11 +76,14 @@ jobs:
         # Mirrors wx/_SConscript:
         #   include path : wx/include + wx/lib/mswu (vendored wxWidgets 3.3.2)
         #                + as_include (downloaded angelscript.h)
+        #                + ASAddon/include (downloaded scriptarray.h)
         #   defines      : UNICODE _UNICODE WXUSINGDLL __WXMSW__
-        #   sources      : wx.cpp + src/{runtime,helpers,manager,register,
-        #                  scriptarray}.cpp (scriptarray.cpp is the AngelScript
-        #                  add-on vendored verbatim from samtupy/nvgt — see
-        #                  AGENTS.md "scriptarray vendoring" for why)
+        #   sources      : wx.cpp + src/{runtime,helpers,manager,register}.cpp
+        #                + ASAddon/plugin/scriptarray.cpp
+        #                  (NVGT's wrapper file: it sets
+        #                  NVGT_PLUGIN_INCLUDE then pulls in
+        #                  ASAddon/src/scriptarray.cpp — see AGENTS.md
+        #                  "scriptarray (consumed from ASAddon)")
         #   libs         : wxmsw33u_core.lib wxbase33u.lib (import libs;
         #                  WXUSINGDLL means the actual code lives in the
         #                  wxmsw332u_core_vc14x_x64.dll shipped under wx/dll/)
@@ -75,7 +99,7 @@ jobs:
             'src/helpers.cpp',
             'src/manager.cpp',
             'src/register.cpp',
-            'src/scriptarray.cpp'
+            "$env:GITHUB_WORKSPACE/ASAddon/plugin/scriptarray.cpp"
           )
 
           $cppArgs = @(
@@ -85,6 +109,7 @@ jobs:
             '/I', 'include',
             '/I', 'lib/mswu',
             '/I', "$env:GITHUB_WORKSPACE/as_include",
+            '/I', "$env:GITHUB_WORKSPACE/ASAddon/include",
             '/DUNICODE', '/D_UNICODE', '/DWXUSINGDLL', '/D__WXMSW__',
             '/D_CRT_SECURE_NO_WARNINGS'
           )

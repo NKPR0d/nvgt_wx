@@ -143,11 +143,17 @@ What the workflow does:
    rot when upstream bumps `NVGT_PLUGIN_API_VERSION`.
 3. Downloads `angelscript.h` from `codecat/angelscript-mirror` into
    `<workspace>/as_include/angelscript.h`.
-4. Sets up MSVC x64 via `ilammy/msvc-dev-cmd@v1`.
-5. Compiles the five sources with the same flags NVGT's `SConstruct`
-   uses (`/MT /EHsc /std:c++20 /J /utf-8 /Gy /GF /Zc:inline /bigobj
-   /permissive- /O2`).
-6. Links against the vendored `wxmsw33u_core.lib` + `wxbase33u.lib` and
+4. Downloads `scriptarray.h` (`ASAddon/include/`),
+   `scriptarray.cpp` (`ASAddon/src/`) and the wrapper file
+   (`ASAddon/plugin/scriptarray.cpp`) from `samtupy/nvgt` into
+   `<workspace>/ASAddon/{include,src,plugin}/`. The wrapper is what
+   gets compiled; see "scriptarray (consumed from ASAddon)" below
+   for why all three files are needed.
+5. Sets up MSVC x64 via `ilammy/msvc-dev-cmd@v1`.
+6. Compiles the bridge sources plus the scriptarray wrapper with the
+   same flags NVGT's `SConstruct` uses (`/MT /EHsc /std:c++20 /J
+   /utf-8 /Gy /GF /Zc:inline /bigobj /permissive- /O2`).
+7. Links against the vendored `wxmsw33u_core.lib` + `wxbase33u.lib` and
    uploads `nvgt_wx.dll` as an artifact.
 
 The CI deliberately does *not* link against NVGT or AngelScript libs:
@@ -376,7 +382,7 @@ the cleanup is fine; one held across a `sizer.clear()`, a `frame.destroy()`
 of the containing window, or any explicit `replace`/`detach` call is a
 dangling pointer the bridge cannot rescue.
 
-### scriptarray vendoring
+### scriptarray (consumed from ASAddon)
 
 `array<T>` on the AngelScript side is provided by the AS standard
 `scriptarray` add-on. NVGT registers it once on the engine before
@@ -385,63 +391,79 @@ plugins load — the plugin must NOT register it again. What the plugin
 selector wrappers in `helpers.cpp` (`as_array_to_wx_strings`,
 `wx_strings_to_as_array`, `wx_ints_to_as_array`,
 `wx_item_container_append_many`, …) call `CScriptArray::GetSize`,
-`At`, `SetValue`, `Create` and friends. To get those definitions
-without forcing every plugin author to ship the same source, the
-add-on is vendored in this repo as `wx/src/scriptarray.{h,cpp}` and
-compiled into `nvgt_wx.dll` along with the rest of the bridge.
+`At`, `SetValue`, `Create` and friends.
 
-The vendored copy comes from NVGT's
-[`ASAddon/{include,src}/scriptarray.{h,cpp}`](https://github.com/samtupy/nvgt).
-**Treat it as upstream code** — when NVGT bumps its bundled copy,
-re-vendor in the same PR (and leave a note here). The local copy
-carries two clearly marked nvgt_wx-only additions, both at the top of
-`scriptarray.cpp` and tagged `nvgt_wx vendoring note`. When
-re-vendoring, diff against upstream, drop in the new file, then re-
-apply the additions.
+The plugin does **not** vendor scriptarray. Instead it consumes the
+add-on directly from NVGT's `ASAddon/` tree, the same way the upstream
+`plugin/redis/` plugin does:
 
-Local additions:
+- `wx/src/common.h` does `#include <scriptarray.h>`. NVGT's main
+  `SConstruct` adds `#ASAddon/include` to `CPPPATH` so the angled
+  include resolves to `ASAddon/include/scriptarray.h`.
+- `wx/_SConscript` compiles NVGT's tiny wrapper file
+  `#ASAddon/plugin/scriptarray.cpp` (three lines: `#define
+  NVGT_PLUGIN_INCLUDE`, `#include "../../src/nvgt_plugin.h"`,
+  `#include "../src/scriptarray.cpp"`) and links the resulting
+  object into `nvgt_wx.dll`. The wrapper's relative includes only
+  resolve under the upstream directory layout, which is why the
+  SConscript references it via the `#ASAddon/plugin/` SCons-tree
+  prefix and not a copy in this repo.
 
-- `userAlloc` / `userFree` initialised to `nullptr` (instead of
-  `asAllocMem` / `asFreeMem`) and routed through a wrapper that
-  reads the current pointer at call time. See gotcha #1 below.
-- `#define NVGT_PLUGIN_INCLUDE` followed by
-  `#include "../../../src/nvgt_plugin.h"` BEFORE everything else,
-  so the AS runtime symbols (`asAllocMem` / `asFreeMem` /
-  `asGetActiveContext` / `asAcquireExclusiveLock` / `asAtomicInc`
-  / `asAtomicDec` / …) are visible as extern function-pointer
-  variables when scriptarray.cpp is compiled. See gotcha #3 below.
+This is the binary the plugin needs because the implementation is
+required at link time even though the type is already registered by
+NVGT — the bridge's `helpers.cpp` calls `CScriptArray::Create` /
+`GetSize` / `At` / `SetValue` directly.
 
-Three NVGT-specific gotchas to keep in mind when re-vendoring:
+The CI workflow (`.github/workflows/build-windows.yml`) builds the
+plugin **outside** NVGT's SCons tree. To keep CI working with this
+contract it downloads three files from `samtupy/nvgt@main` and stages
+them so the wrapper's relative includes resolve:
+
+- `ASAddon/include/scriptarray.h` → put under
+  `<workspace>/ASAddon/include/` and added to the `/I` list.
+- `ASAddon/src/scriptarray.cpp` → put under
+  `<workspace>/ASAddon/src/`. **Not** added to the source list
+  directly; it is pulled in by the wrapper.
+- `ASAddon/plugin/scriptarray.cpp` → put under
+  `<workspace>/ASAddon/plugin/` and added to the `$sources` list as
+  the cpp that cl.exe actually compiles.
+
+These files are downloaded, not vendored, for the same reason as
+`nvgt_plugin.h` and `angelscript.h`: pinning a copy here would
+silently rot when NVGT bumps its scriptarray.
+
+NVGT-specific gotchas:
 
 1. NVGT plugins link with `ANGELSCRIPT_DLL_MANUAL_IMPORT`, so
-   `asAllocMem` / `asFreeMem` are function-pointer **variables**
-   that are null at static-init time — they only become valid
-   after `prepare_plugin()` runs. The vendored copy must NOT freeze
-   those pointers into static variables (e.g. via
-   `static auto userAlloc = asAllocMem;`); each call has to read
-   them fresh. This is how upstream NVGT already writes it; just
-   don't "optimise" it back.
-2. `scriptarray.cpp` must be added to **both** `wx/_SConscript`
-   (`source=[...]`) and the `$sources` list in
+   `asAllocMem` / `asFreeMem` are function-pointer **variables**.
+   The wrapper at `ASAddon/plugin/scriptarray.cpp` `#define`s
+   `NVGT_PLUGIN_INCLUDE` and pulls in `nvgt_plugin.h` *before*
+   including the implementation, which is what makes those pointer
+   declarations visible to scriptarray.cpp. Compiling
+   `ASAddon/src/scriptarray.cpp` directly (without the wrapper)
+   would fail with `C2065`/`C3861` for `asAllocMem` /
+   `asAcquireExclusiveLock` / `asAtomicInc` / … in ~30 call sites
+   because `<angelscript.h>` strips those declarations under
+   `ANGELSCRIPT_DLL_MANUAL_IMPORT`, and the function-pointer
+   replacements are declared by `nvgt_plugin.h`, not by AngelScript.
+2. The wrapper must be added to **both** `wx/_SConscript`
+   (`source=[..., scriptarray]`) and the `$sources` list in
    `.github/workflows/build-windows.yml`. There is no glob — a
    missing entry will silently link a `nvgt_wx.dll` whose
    `array<T>` calls hit unresolved symbols at runtime.
-3. Plain `<angelscript.h>` is *not enough* on its own.
-   Defining `ANGELSCRIPT_DLL_MANUAL_IMPORT` strips the AS runtime
-   functions out of `<angelscript.h>` entirely; the function-
-   pointer variables that take their place are declared by
-   `nvgt_plugin.h`, not by `<angelscript.h>`. So the vendored
-   `scriptarray.cpp` carries the local addition above
-   (`#define NVGT_PLUGIN_INCLUDE` + `#include "../../../src/nvgt_plugin.h"`
-   at the very top) instead of relying on a build-level
-   `/DANGELSCRIPT_DLL_MANUAL_IMPORT` flag. Two reasons not to use
-   the build-level flag: (a) without nvgt_plugin.h's symbol
-   declarations the strip leaves `asAllocMem` / `asAtomicInc` /
-   … completely undeclared and MSVC fails with `C2065`/`C3861`
-   for ~30 call sites, and (b) every *other* TU already includes
-   nvgt_plugin.h (which `#define`s `ANGELSCRIPT_DLL_MANUAL_IMPORT`
-   internally), so a global `/D` flag would cause MSVC C4005
-   redefinition warnings on every other source.
+3. Upstream `ASAddon/src/scriptarray.cpp` initialises
+   `static asALLOCFUNC_t userAlloc = asAllocMem;` at C++ static-init
+   time. In a manual-import plugin DLL `asAllocMem` is `nullptr`
+   until `prepare_plugin()` runs from `plugin_main()`, so this
+   captures `nullptr` and a naïve reading suggests the first
+   `CScriptArray::Create()` would dereference a null function
+   pointer. The redis plugin upstream uses the same code and ships
+   in production, so empirically this either does not bite or is
+   masked by some platform-specific quirk; if `array<T>` operations
+   crash on first use after this refactor, the fix is to lazy-resolve
+   `userAlloc` / `userFree` through `asAllocMem` / `asFreeMem` at
+   call time. The proper home for that fix is upstream NVGT, not a
+   local patch on top of the downloaded copy.
 
 ## Naming and code conventions
 
@@ -966,9 +988,10 @@ rename something here, update this section in the same PR.
   (`wx_choice_style`, `wx_combo_box_style`, `wx_list_box_style`,
   `wx_radio_box_style`); selector event types
   (`WX_EVT_CHOICE`, `WX_EVT_COMBOBOX*`, `WX_EVT_LISTBOX*`,
-  `WX_EVT_RADIOBOX`); factory methods on `wx`. Vendored
-  `scriptarray` add-on so the bridge can take/return `array<string>@`
-  for batch operations and `array<int>@` for `wx_list_box.get_selections`.
+  `WX_EVT_RADIOBOX`); factory methods on `wx`. Wired the bridge to
+  the AS `scriptarray` add-on (consumed from NVGT's `ASAddon/`, not
+  vendored) so it can take/return `array<string>@` for batch
+  operations and `array<int>@` for `wx_list_box.get_selections`.
 - **Phase 1 — basic GUI (in progress):** dialogs
   (`wx_dialog`, `wx_message_dialog`, `wx_file_dialog`, …); range
   controls (`wx_slider`, `wx_gauge`, `wx_spin_ctrl`); pickers; books
